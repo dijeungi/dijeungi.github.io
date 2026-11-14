@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "id": "2745e996-84ba-44a8-8e41-a1ab2a3a2829",
+  "slug": "테스트-제목-입니다",
+  "title": "테스트 제목 입니다.",
+  "category": "테스트",
+  "description": "테스트 내용 입니다.",
+  "date": "2026-11-14",
+  "content": {
+    "type": "doc",
+    "content": [
+      {
+        "type": "paragraph",
+        "content": [
+          {
+            "type": "text",
+            "text": "테스트 내용 입니다."
+          }
+        ]
+      }
+    ]
+  },
+  "subtitle": "",
+  "readingMinutes": 1,
+  "updatedAt": "2026-11-14T18:57:57.104Z"
+}
