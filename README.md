@@ -122,7 +122,7 @@ npm run build
 - `app/styles/`: 공통 reset, 레이아웃 토큰과 타이포그래피
 - `app/NotFound.module.css`: 404 화면 전용 스타일
 
-영문은 [Google Sans Flex](https://github.com/googlefonts/googlesans-flex), 한글은 [Noto Sans KR](https://fonts.google.com/specimen/Noto+Sans+KR)을 사용합니다. `next/font`가 빌드 시 글꼴을 받아 사이트 자산으로 제공하므로 빌드에는 Google Fonts 연결이 필요하고, 방문자는 이 사이트에서 글꼴을 받습니다. 각 글꼴의 라이선스는 `public/licenses/`에 보관합니다.
+한글과 영문 및 숫자는 [Himedia_Community의 적용 방식](https://github.com/dijeungi/Himedia_Community/blob/95fd054624c004ccfb31580cc51269f1dc0499a8/frontend/app/styles/typography.css)과 동일한 Pretendard Variable 1.3.9를 사용합니다. 원본 WOFF2 파일을 `app/shared/fonts/pretendard/Pretendard-Variable.woff2`에 보관하고 `app/styles/typography.css`의 `@font-face`로 불러옵니다. 굵기 범위는 45부터 920, 표시 방식은 `font-display: swap`이며, `html`과 `body`에 적용하고 버튼 및 입력 요소는 `font: inherit`로 상속합니다. 폰트 파일은 변환하지 않았으며 빌드 결과의 로컬 자산으로 제공하므로 Google Fonts 연결은 필요하지 않습니다. 라이선스 원문은 `public/licenses/Pretendard-LICENSE.txt`에 보관합니다.
 
 블로그 이름은 `app/shared/constants/site.ts`에서 관리합니다.
 
