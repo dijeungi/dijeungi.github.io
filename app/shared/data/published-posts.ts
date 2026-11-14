@@ -1,10 +1,9 @@
 import { join } from "node:path";
 import { readdir, readFile, stat } from "node:fs/promises";
 
-import { posts } from "./posts";
 import { parseBlogDocument, toArticlePost } from "../lib/content";
 
-import type { Post } from "./posts";
+import type { Post } from "../types/post";
 import type { BlogDocument } from "../types/content";
 
 // 로컬 발행 글 목록 읽기
@@ -39,11 +38,10 @@ async function readPublishedDocuments(): Promise<BlogDocument[]> {
   return documents.sort((a, b) => b.date.localeCompare(a.date) || b.updatedAt.localeCompare(a.updatedAt) || a.slug.localeCompare(b.slug));
 }
 
-// 발행 글과 기존 예시 글 조합
+// 실제 발행 파일에서 글 목록 구성
 export async function getAllPosts(): Promise<Post[]> {
   const documents = await readPublishedDocuments();
-  const authoredSlugs = new Set(documents.map((document) => document.slug.normalize("NFC")));
-  return [...documents.map(toArticlePost), ...posts.filter((post) => !authoredSlugs.has(post.slug.normalize("NFC")))];
+  return documents.map(toArticlePost);
 }
 
 // 글 주소 기준 발행 본문 조회

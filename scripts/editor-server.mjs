@@ -8,7 +8,6 @@ import { basename, dirname, join, relative, resolve } from "node:path";
 import { randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import { copyFile, lstat, mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
 
-import { posts } from "../app/shared/data/posts.ts";
 import { parseBlogDocument } from "../app/shared/lib/content.ts";
 
 const execFileAsync = promisify(execFile);
@@ -82,7 +81,7 @@ export function createEditorService(options = {}) {
   const mediaRoot = join(stateRoot, "media");
   const postsRoot = join(appRoot, "content", "posts");
   const uploadsRoot = join(appRoot, "public", "uploads");
-  const reservedSlugs = new Set(options.sampleSlugs || posts.map((post) => post.slug));
+  const reservedSlugs = new Set(options.reservedSlugs || []);
   let pending = Promise.resolve();
 
   // 앱과 저장소에 한정한 Git 명령 실행

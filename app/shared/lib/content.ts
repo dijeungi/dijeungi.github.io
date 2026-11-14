@@ -1,4 +1,4 @@
-import type { Post } from "../data/posts";
+import type { Post } from "../types/post";
 import type { BlogDocument, ParseBlogDocumentOptions, RichDocument, RichMark, RichNode } from "../types/content";
 
 const MAX_SLUG_BYTES = 180;

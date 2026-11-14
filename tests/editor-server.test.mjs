@@ -40,7 +40,7 @@ async function fixture(context, options = {}) {
   await git(base, "init", "--bare", "--initial-branch=main", remote);
   await git(root, "remote", "add", "origin", remote);
   await git(root, "push", "-u", "origin", "main");
-  const service = createEditorService({ appRoot, sampleSlugs: ["reserved-example"], ...options });
+  const service = createEditorService({ appRoot, reservedSlugs: ["reserved-example"], ...options });
   return { root, base, appRoot, service, remote };
 }
 

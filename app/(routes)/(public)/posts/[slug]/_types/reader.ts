@@ -1,4 +1,4 @@
-import type { Post } from "@/app/shared/data/posts";
+import type { Post } from "@/app/shared/types/post";
 import type { RichDocument } from "@/app/shared/types/content";
 import type { useArticleReader } from "../_hooks/useArticleReader";
 
