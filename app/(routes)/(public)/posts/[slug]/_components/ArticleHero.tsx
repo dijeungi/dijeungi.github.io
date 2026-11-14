@@ -1,15 +1,10 @@
 import Image from "next/image";
 
+import { formatPostDate } from "@/app/shared/lib/date";
+
 import styles from "../PostDetail.module.css";
 
 import type { ArticleReaderProps } from "../_types/reader";
-
-const dateFormatter = new Intl.DateTimeFormat("en-US", {
-  day: "numeric",
-  year: "numeric",
-  month: "short",
-  timeZone: "UTC",
-});
 
 // 카테고리와 제목 및 대표 이미지 표시
 export function ArticleHero({ post }: ArticleReaderProps) {
@@ -21,7 +16,7 @@ export function ArticleHero({ post }: ArticleReaderProps) {
           <h1 id="article-title">{post.title}</h1>
           <div className={styles.meta} aria-label="글 정보">
             <time dateTime={post.date}>
-              {dateFormatter.format(new Date(post.date + "T00:00:00Z"))}
+              {formatPostDate(post.date)}
             </time>
             <span className={styles.metaSeparator} aria-hidden="true">|</span>
             <span>{post.readingMinutes} min read</span>

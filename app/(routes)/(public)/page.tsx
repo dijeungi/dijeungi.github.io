@@ -1,33 +1,21 @@
-import { notFound } from "next/navigation";
-
-import { getHomePost } from "@/app/shared/data/published-posts";
-import { ArticleReader } from "./posts/[slug]/_components/ArticleReader";
+import { HomePage } from "./_components/HomePage";
+import { getAllPosts } from "@/app/shared/data/published-posts";
+import { siteName, siteDescription } from "@/app/shared/constants/site";
 
 import type { Metadata } from "next";
 
-// 최신 발행 글의 검색 메타데이터 구성
-export async function generateMetadata(): Promise<Metadata> {
-  const post = await getHomePost();
+export const metadata: Metadata = {
+  title: { absolute: siteName },
+  description: siteDescription,
+  openGraph: { type: "website", title: siteName, description: siteDescription },
+};
 
-  return {
-    title: post?.title,
-    description: post?.description,
-    openGraph: {
-      type: "article",
-      title: post?.title,
-      description: post?.description,
-      publishedTime: post?.date,
-    },
-  };
-}
+// 발행 글과 기존 글을 모은 메인 페이지
+export default async function BlogPage() {
+  const posts = await getAllPosts();
+  const previews = posts.map(({ slug, title, description, category, date, readingMinutes, heroImage }) => ({
+    slug, title, description, category, date, readingMinutes, heroImage,
+  }));
 
-// 기본 주소의 글 상세 화면
-export default async function ArticlePage() {
-  const post = await getHomePost();
-
-  if (!post) {
-    notFound();
-  }
-
-  return <ArticleReader key={post.slug} post={post} />;
+  return <HomePage posts={previews} />;
 }

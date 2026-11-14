@@ -6,6 +6,7 @@ import { ArticleHeader } from "./ArticleHeader";
 import { useArticleReader } from "../_hooks/useArticleReader";
 
 import styles from "../PostDetail.module.css";
+import frameStyles from "@/app/shared/styles/PageFrame.module.css";
 
 import type { ArticleReaderProps } from "../_types/reader";
 
@@ -24,7 +25,7 @@ export function ArticleReader({ post }: ArticleReaderProps) {
   } = useArticleReader();
 
   return (
-    <div className={styles.reader}>
+    <div className={styles.reader + " " + frameStyles.frame}>
       <a className={styles.skipLink} href="#main-content">본문으로 바로가기</a>
       <ArticleHeader
         title={post.title}

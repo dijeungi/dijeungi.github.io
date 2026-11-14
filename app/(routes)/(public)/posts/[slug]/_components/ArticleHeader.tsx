@@ -4,6 +4,7 @@ import { ShareIcon } from "./ShareIcon";
 import { siteName } from "@/app/shared/constants/site";
 
 import styles from "../PostDetail.module.css";
+import frameStyles from "@/app/shared/styles/PageFrame.module.css";
 
 import type { ArticleHeaderProps } from "../_types/reader";
 
@@ -24,7 +25,7 @@ export function ArticleHeader({
       ref={headerRef}
       className={isReading ? styles.readerHeader + " " + styles.reading : styles.readerHeader}
     >
-      <div className={styles.headerInner + (showEditor ? " " + styles.withEditor : "")}>
+      <div className={styles.headerInner + " " + frameStyles.content + (showEditor ? " " + styles.withEditor : "")}>
         <div className={styles.headerTitles}>
           <Link className={styles.brand} href="/">
             <span className={styles.brandName}>{siteName}</span>

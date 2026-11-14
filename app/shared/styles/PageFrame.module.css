@@ -1,0 +1,18 @@
+.frame {
+  --page-max-width: 1800px;
+  --heading-max-width: 1120px;
+  --page-gutter: 16px;
+}
+
+.content {
+  width: calc(100% - var(--page-gutter) * 2);
+  max-width: var(--heading-max-width);
+  margin-inline: auto;
+}
+
+@media (min-width: 481px) {
+  .frame { --page-gutter: 48px; }
+}
+@media (min-width: 1025px) {
+  .frame { --page-gutter: 72px; }
+}

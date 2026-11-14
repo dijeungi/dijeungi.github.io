@@ -50,8 +50,3 @@ export async function getAllPosts(): Promise<Post[]> {
 export async function getPostBySlug(slug: string): Promise<Post | undefined> {
   return (await getAllPosts()).find((post) => post.slug.normalize("NFC") === slug.normalize("NFC"));
 }
-
-// 기본 주소의 최신 발행 글 조회
-export async function getHomePost(): Promise<Post | undefined> {
-  return (await getAllPosts())[0];
-}
