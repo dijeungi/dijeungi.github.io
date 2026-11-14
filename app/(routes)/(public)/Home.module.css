@@ -284,12 +284,6 @@
 .metaSeparator {
   color: var(--theme-border-strong, #b7c0cd);
 }
-.empty {
-  margin: 0;
-  color: var(--home-muted);
-  font-size: 15px;
-  line-height: 26px;
-}
 .pagination {
   grid-column: 2;
   display: flex;
@@ -340,6 +334,10 @@
   color: var(--home-muted);
   font-size: 12px;
   line-height: 20px;
+  text-align: center;
+}
+.footer[data-empty="true"] {
+  border-top: 0;
 }
 
 @media (max-width: 1100px) {
