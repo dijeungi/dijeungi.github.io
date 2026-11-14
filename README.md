@@ -47,6 +47,18 @@ npm run dev
 
 읽는 시간을 `0`으로 두면 본문 길이를 기준으로 계산합니다. 글 소개는 검색 메타데이터에 사용하며 제목 아래 부설명으로 표시하지 않습니다.
 
+## 댓글
+
+발행한 글 상세의 본문 아래에 [giscus](https://giscus.app/ko) 댓글을 표시합니다. 방문자는 GitHub 계정으로 로그인해 댓글을 남길 수 있으며, 댓글은 [블로그 저장소의 Discussions](https://github.com/dijeungi/dijeungi.github.io/discussions)에 보관합니다.
+
+처음 사용할 때는 [giscus 앱 설치](https://github.com/apps/giscus/installations/new)에서 `Only select repositories`를 선택하고 `dijeungi.github.io` 저장소를 지정합니다. 저장소의 Discussions와 `Announcements` 카테고리를 사용합니다. 앱 설치 후 글 상세를 새로고침해 로그인 화면을 확인합니다.
+
+- 댓글은 글 주소별로 구분하며, 로컬 상세와 공개 상세가 같은 댓글을 표시합니다. GitHub에서 글로 돌아가는 링크는 공개 사이트 주소를 사용합니다.
+- 비공개 글쓰기 미리보기에는 댓글 위젯을 불러오지 않습니다. 읽기 진행률도 댓글을 제외한 본문만 기준으로 계산합니다.
+- 공식 `giscus` 웹 컴포넌트 `1.6.0`을 esm.sh에서 불러오고, 댓글 화면은 giscus.app에서 제공합니다. 별도 서버나 API 토큰은 필요하지 않습니다.
+- 글을 이동하면 이전 위젯을 제거하고 새 글의 댓글을 연결합니다. 라이브러리 로딩이 실패해도 GitHub 링크로 이동할 수 있습니다.
+- 저장소와 카테고리의 공개 ID, 언어와 테마는 `app/(routes)/(public)/posts/[slug]/_hooks/useArticleComments.ts`에서 관리합니다.
+
 ## 검사
 
 ```sh
@@ -65,6 +77,9 @@ npm run build
 - `app/(routes)/(public)/posts/[slug]/page.tsx`: 글별 정적 페이지와 메타데이터
 - `app/(routes)/(public)/posts/[slug]/_components/`: 글 상세 조합, 헤더, 제목 영역과 본문
 - `app/(routes)/(public)/posts/[slug]/_hooks/`: 읽기 진행률과 복사 동작
+- `app/(routes)/(public)/posts/[slug]/_components/ArticleComments.tsx`: 본문 하단 GitHub 댓글
+- `app/(routes)/(public)/posts/[slug]/_hooks/useArticleComments.ts`: 댓글 위젯 연결과 화면 해제
+- `app/(routes)/(public)/posts/[slug]/ArticleComments.module.css`: 댓글 영역 전용 스타일
 - `app/(routes)/(public)/posts/[slug]/PostDetail.module.css`: 글 상세 전용 스타일
 - `app/(routes)/(public)/posts/[slug]/_types/`: 글 상세 컴포넌트의 타입 계약
 - `app/shared/data/posts.ts`: 샘플 글 데이터

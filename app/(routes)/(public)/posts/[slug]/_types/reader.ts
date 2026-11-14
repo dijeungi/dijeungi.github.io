@@ -4,7 +4,7 @@ import type { useArticleReader } from "../_hooks/useArticleReader";
 
 type ReaderState = ReturnType<typeof useArticleReader>;
 
-export type ArticleReaderProps = { post: Post };
+export type ArticleReaderProps = { post: Post; commentsEnabled?: boolean };
 
 export type ArticleHeaderProps = Pick<
   ReaderState,

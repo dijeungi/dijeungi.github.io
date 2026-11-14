@@ -3,6 +3,7 @@
 import { ArticleBody } from "./ArticleBody";
 import { ArticleHero } from "./ArticleHero";
 import { ArticleHeader } from "./ArticleHeader";
+import { ArticleComments } from "./ArticleComments";
 import { useArticleReader } from "../_hooks/useArticleReader";
 
 import styles from "../PostDetail.module.css";
@@ -11,7 +12,7 @@ import frameStyles from "@/app/shared/styles/PageFrame.module.css";
 import type { ArticleReaderProps } from "../_types/reader";
 
 // 읽기 상태와 글 상세 화면 조합
-export function ArticleReader({ post }: ArticleReaderProps) {
+export function ArticleReader({ post, commentsEnabled = false }: ArticleReaderProps) {
   const {
     progress,
     isReading,
@@ -45,6 +46,7 @@ export function ArticleReader({ post }: ArticleReaderProps) {
             contentRef={contentRef}
             codeStatuses={codeStatuses}
           />
+          {commentsEnabled && <ArticleComments key={post.slug} slug={post.slug} />}
         </div>
       </main>
     </div>

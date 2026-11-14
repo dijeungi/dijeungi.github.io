@@ -1,0 +1,43 @@
+.comments {
+  grid-column: var(--body-column);
+  min-width: 0;
+  padding-bottom: 96px;
+}
+
+.heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.heading h2 {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 500;
+  line-height: 32px;
+}
+
+.heading a {
+  color: #6b7280;
+  font-size: 13px;
+  line-height: 24px;
+}
+
+.embed {
+  min-height: 200px;
+}
+
+.embed > giscus-widget {
+  display: block;
+  width: 100%;
+}
+
+.feedback {
+  margin: 0 0 20px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 24px;
+}

@@ -36,6 +36,9 @@ export async function generateMetadata({
       description: post.description,
       publishedTime: post.date,
     },
+    other: {
+      "giscus:backlink": "https://dijeungi.github.io/posts/" + encodeURIComponent(post.slug) + "/",
+    },
   };
 }
 
@@ -52,5 +55,5 @@ export default async function PostPage({
     notFound();
   }
 
-  return <ArticleReader key={post.slug} post={post} />;
+  return <ArticleReader key={post.slug} post={post} commentsEnabled />;
 }
