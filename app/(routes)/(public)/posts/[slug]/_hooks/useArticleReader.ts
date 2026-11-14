@@ -118,6 +118,16 @@ export function useArticleReader() {
     };
   }, []);
 
+  // 동작 줄이기 설정을 반영한 페이지 최상단 이동
+  function scrollToTop() {
+    window.scrollTo({
+      top: 0,
+      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+        ? "instant"
+        : "smooth",
+    });
+  }
+
   // 현재 글 주소 복사와 결과 안내
   async function copyLink() {
     if (shareTimerRef.current !== null) {
@@ -163,6 +173,7 @@ export function useArticleReader() {
     isReading,
     copyCode,
     copyLink,
+    scrollToTop,
     headerRef,
     contentRef,
     shareStatus,

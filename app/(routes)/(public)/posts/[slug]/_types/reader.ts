@@ -8,7 +8,7 @@ export type ArticleReaderProps = { post: Post };
 
 export type ArticleHeaderProps = Pick<
   ReaderState,
-  "progress" | "isReading" | "copyLink" | "headerRef" | "shareStatus"
+  "progress" | "isReading" | "copyLink" | "scrollToTop" | "headerRef" | "shareStatus"
 > & { title: string };
 
 export type ArticleBodyProps = Pick<

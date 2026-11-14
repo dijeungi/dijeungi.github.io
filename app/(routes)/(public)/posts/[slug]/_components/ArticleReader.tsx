@@ -16,6 +16,7 @@ export function ArticleReader({ post }: ArticleReaderProps) {
     isReading,
     copyCode,
     copyLink,
+    scrollToTop,
     headerRef,
     contentRef,
     shareStatus,
@@ -30,6 +31,7 @@ export function ArticleReader({ post }: ArticleReaderProps) {
         progress={progress}
         isReading={isReading}
         copyLink={copyLink}
+        scrollToTop={scrollToTop}
         headerRef={headerRef}
         shareStatus={shareStatus}
       />

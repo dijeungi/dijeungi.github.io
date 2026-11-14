@@ -13,6 +13,7 @@ export function ArticleHeader({
   progress,
   isReading,
   copyLink,
+  scrollToTop,
   headerRef,
   shareStatus,
 }: ArticleHeaderProps) {
@@ -25,10 +26,17 @@ export function ArticleHeader({
     >
       <div className={styles.headerInner + (showEditor ? " " + styles.withEditor : "")}>
         <div className={styles.headerTitles}>
-          <span className={styles.brand}>
+          <Link className={styles.brand} href="/">
             <span className={styles.brandName}>{siteName}</span>
-          </span>
-          <span className={styles.currentTitle}>{title}</span>
+          </Link>
+          <button
+            className={styles.currentTitle}
+            type="button"
+            aria-label={title + ", 페이지 맨 위로 이동"}
+            onClick={scrollToTop}
+          >
+            {title}
+          </button>
         </div>
         {showEditor && <Link className={styles.editorLink} href="/write/">글쓰기</Link>}
         <button
