@@ -10,7 +10,9 @@ import {
   parseBlogDocument,
   isSafeContentUrl,
   createEmptyDocument,
+  getFirstContentImage,
   estimateReadingMinutes,
+  normalizeDraftMetadata,
 } from "../app/shared/lib/content.ts";
 
 // 검증에 사용할 기본 글 문서 생성
@@ -58,9 +60,11 @@ test("주소의 대소문자와 Unicode를 통일하고 파일 이름 길이를 
   assert.throws(() => parseBlogDocument(document({ slug: "가".repeat(61) })));
 });
 
-test("발행하려면 제목과 글 주소 및 본문이 필요하다", () => {
-  assert.throws(() => parseBlogDocument(document({ title: "" }), { publish: true }));
-  assert.throws(() => parseBlogDocument(document({ slug: "" }), { publish: true }));
+test("발행 필수 입력과 자동 설정 누락을 구분하고 빈 본문은 거부한다", () => {
+  assert.throws(() => parseBlogDocument(document({ title: "" }), { publish: true }), { message: "제목과 카테고리를 입력해 주세요." });
+  assert.throws(() => parseBlogDocument(document({ category: "" }), { publish: true }), { message: "제목과 카테고리를 입력해 주세요." });
+  assert.throws(() => parseBlogDocument(document({ slug: "" }), { publish: true }), { message: "자동 설정을 완료하지 못했습니다. 다시 저장한 뒤 발행해 주세요." });
+  assert.throws(() => parseBlogDocument(document({ date: "" }), { publish: true }), { message: "자동 설정을 완료하지 못했습니다. 다시 저장한 뒤 발행해 주세요." });
   assert.throws(() => parseBlogDocument(document({ content: createEmptyDocument() }), { publish: true }));
   assert.equal(parseBlogDocument(document(), { publish: true }).title, "첫 번째 글");
 });
@@ -150,4 +154,65 @@ test("실제 편집기 문서에서 서식과 이미지 크기 및 코드를 저
   assert.equal(result.content.content[2].attrs.width, 800);
   assert.equal(result.content.content[2].attrs.height, 600);
   assert.equal(result.content.content[3].content[0].text, "const count = 1;\n");
+});
+
+test("선택 부제목은 기존 소개와 구분하고 비우면 본문 소개로 자동 환원한다", () => {
+  const legacy = parseBlogDocument(document());
+  assert.equal(legacy.subtitle, undefined);
+  assert.equal(legacy.description, "검색 설명");
+  assert.equal(toArticlePost(legacy).subtitle, undefined);
+  const edited = parseBlogDocument(document({ subtitle: "  선택한 부제목  " }));
+  assert.equal(edited.subtitle, "선택한 부제목");
+  assert.equal(edited.description, "선택한 부제목");
+  assert.equal(toArticlePost(edited).subtitle, "선택한 부제목");
+  const cleared = parseBlogDocument({ ...edited, subtitle: "", description: edited.description });
+  assert.equal(cleared.description, "본문입니다.");
+  assert.equal(cleared.subtitle, "");
+  assert.throws(() => parseBlogDocument(document({ subtitle: null })));
+  assert.throws(() => parseBlogDocument(document({ subtitle: "가".repeat(501) })));
+});
+
+test("새 문서의 소개는 입력 필드 없이 본문의 첫 Unicode 문자로 제한한다", () => {
+  const content = { type: "doc", content: [{ type: "paragraph", content: [{ type: "text", text: "😀".repeat(210) }] }] };
+  const result = parseBlogDocument(document({ subtitle: "", description: undefined, content }));
+  assert.equal(result.description, "😀".repeat(200));
+  assert.equal(Array.from(result.description).length, 200);
+});
+
+test("자동 소개는 인라인 서식 경계에 공백을 넣지 않고 문단 사이만 구분한다", () => {
+  const content = { type: "doc", content: [
+    { type: "paragraph", content: [
+      { type: "text", text: "React", marks: [{ type: "bold" }] },
+      { type: "text", text: "의 렌더링" },
+    ] },
+    { type: "paragraph", content: [{ type: "text", text: "다음 문단입니다." }] },
+  ] };
+  const result = parseBlogDocument(document({ subtitle: "", content }));
+  assert.equal(result.description, "React의 렌더링 다음 문단입니다.");
+});
+
+test("본문의 첫 이미지를 중첩 순서대로 썸네일로 쓰고 없는 크기를 만들지 않는다", () => {
+  const first = { src: "/uploads/first.png", alt: "첫 이미지" };
+  const second = { src: "/uploads/second.png", alt: "두 번째 이미지", width: 900, height: 600 };
+  const content = { type: "doc", content: [
+    { type: "blockquote", content: [{ type: "image", attrs: first }] },
+    { type: "image", attrs: second },
+  ] };
+  const result = parseBlogDocument(document({ subtitle: "", content, heroImage: { src: "javascript:ignored" } }), { publish: true });
+  assert.deepEqual(getFirstContentImage(result.content), first);
+  assert.deepEqual(result.heroImage, first);
+  assert.deepEqual(toArticlePost(result).heroImage, first);
+  const reordered = normalizeDraftMetadata({ ...result, content: { type: "doc", content: [...content.content].reverse() } });
+  assert.deepEqual(reordered.heroImage, second);
+  const removed = normalizeDraftMetadata({ ...reordered, content: createEmptyDocument() });
+  assert.equal(removed.heroImage, undefined);
+  assert.equal(removed.description, "");
+});
+
+test("자동 메타로 전환하지 않은 기존 문서의 독립 대표 이미지는 보존한다", () => {
+  const heroImage = { src: "/uploads/legacy.png", alt: "기존 대표 이미지", width: 800, height: 450 };
+  const legacy = parseBlogDocument(document({ heroImage }));
+  assert.deepEqual(normalizeDraftMetadata(legacy).heroImage, heroImage);
+  assert.equal(parseBlogDocument({ ...legacy, subtitle: "" }).heroImage, undefined);
+  assert.throws(() => parseBlogDocument(document({ heroImage: { src: "/uploads/legacy.png", alt: "크기 없는 독립 이미지" } })));
 });

@@ -27,13 +27,14 @@ export type BlogDocument = {
   id: string;
   slug: string;
   title: string;
+  subtitle?: string;
   description: string;
   category: string;
   date: string;
   readingMinutes: number;
   updatedAt: string;
   content: RichDocument;
-  heroImage?: { src: string; alt: string; width: number; height: number };
+  heroImage?: { src: string; alt: string; width?: number; height?: number };
 };
 
 export type ParseBlogDocumentOptions = { publish?: boolean };

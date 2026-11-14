@@ -106,8 +106,8 @@ export function HomePage({ posts, github }: HomePageProps) {
                       className={styles.thumbnailImage}
                       src={post.heroImage.src}
                       alt=""
-                      width={post.heroImage.width}
-                      height={post.heroImage.height}
+                      width={post.heroImage.width ?? 1600}
+                      height={post.heroImage.height ?? 900}
                       sizes="(max-width: 600px) 70vw, (max-width: 820px) 224px, 288px"
                       unoptimized
                     />

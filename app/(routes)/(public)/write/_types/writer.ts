@@ -7,7 +7,7 @@ export type WriterIconName = "bold" | "italic" | "strike" | "link" | "bullets" |
 
 export type DraftSummary = Pick<BlogDocument, "id" | "title" | "slug" | "updatedAt">;
 
-export type WriterImage = NonNullable<BlogDocument["heroImage"]>;
+export type WriterImage = Required<NonNullable<BlogDocument["heroImage"]>>;
 
 export type PublishResult = {
   draft: BlogDocument;
@@ -21,11 +21,6 @@ export type WriterErrorResponse = {
   error?: string;
   code?: string;
   commit?: string;
-};
-
-export type WriterBackup = {
-  draft: BlogDocument;
-  dirty: boolean;
 };
 
 export type PostWriterState = ReturnType<typeof usePostWriter>;

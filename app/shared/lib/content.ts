@@ -179,15 +179,40 @@ function collectContent(nodes: RichNode[]): { text: string; hasImage: boolean } 
   let text = "";
   let hasImage = false;
   for (const node of nodes) {
-    text += (node.text || "") + " ";
+    text += node.text || "";
     hasImage ||= node.type === "image";
     if (node.content) {
       const nested = collectContent(node.content);
       text += nested.text;
       hasImage ||= nested.hasImage;
     }
+    if (["paragraph", "heading", "codeBlock", "hardBreak", "image", "horizontalRule"].includes(node.type)) text += " ";
   }
   return { text, hasImage };
+}
+
+// 본문 순서대로 첫 이미지의 실제 속성 수집
+export function getFirstContentImage(content: RichDocument): BlogDocument["heroImage"] {
+  for (const node of content.content) {
+    if (node.type === "image" && node.attrs?.src) {
+      const { src, alt, width, height } = node.attrs;
+      return { src, alt: alt || "", ...(width == null ? {} : { width }), ...(height == null ? {} : { height }) };
+    }
+    if (node.content) {
+      const image = getFirstContentImage({ type: "doc", content: node.content });
+      if (image) return image;
+    }
+  }
+  return undefined;
+}
+
+// 선택 부제목과 본문에서 편집 글의 소개 및 썸네일 갱신
+export function normalizeDraftMetadata(document: BlogDocument): BlogDocument {
+  if (document.subtitle === undefined) return document;
+  const text = collectContent(document.content.content).text.replace(/\s+/gu, " ").trim();
+  const description = document.subtitle.trim() || Array.from(text).slice(0, 200).join("");
+  const heroImage = getFirstContentImage(document.content);
+  return { ...document, description, heroImage };
 }
 
 // 본문 길이 기반 읽는 시간 추정
@@ -204,7 +229,8 @@ export function parseBlogDocument(value: unknown, options: ParseBlogDocumentOpti
   const title = readString(value.title, "제목", 200);
   const slug = readString(value.slug, "글 주소", 384).normalize("NFKC").toLowerCase();
   const category = readString(value.category, "카테고리", 60);
-  const description = readString(value.description, "글 소개", 500);
+  const subtitle = value.subtitle === undefined ? undefined : readString(value.subtitle, "부제목", 500);
+  const description = subtitle === undefined ? readString(value.description, "글 소개", 500) : "";
   const date = readString(value.date, "게시일", 10);
   const updatedAt = readString(value.updatedAt, "저장 시각", 40);
   const content = parseRichDocument(value.content, publish);
@@ -224,10 +250,11 @@ export function parseBlogDocument(value: unknown, options: ParseBlogDocumentOpti
   }
   const document: BlogDocument = {
     version: 1, id: value.id.toLowerCase(), slug, title, category, description, date, content,
+    ...(subtitle === undefined ? {} : { subtitle }),
     readingMinutes: publish && minutes === 0 ? estimateReadingMinutes(content) : minutes,
     updatedAt: new Date(updatedAt).toISOString(),
   };
-  if (value.heroImage != null) {
+  if (subtitle === undefined && value.heroImage != null) {
     if (!isRecord(value.heroImage)) throw new Error("대표 이미지 정보를 확인해 주세요.");
     const alt = readString(value.heroImage.alt ?? "", "대표 이미지 설명", 500);
     if (publish && !alt) throw new Error("대표 이미지 설명을 입력해 주세요.");
@@ -238,24 +265,27 @@ export function parseBlogDocument(value: unknown, options: ParseBlogDocumentOpti
     };
   }
   if (publish) {
-    if (!title || !slug || !category || !date) throw new Error("제목, 글 주소, 카테고리와 게시일을 입력해 주세요.");
+    if (!title || !category) throw new Error("제목과 카테고리를 입력해 주세요.");
+    if (!slug || !date) throw new Error("자동 설정을 완료하지 못했습니다. 다시 저장한 뒤 발행해 주세요.");
     const body = collectContent(content.content);
     if (!body.text.trim() && !body.hasImage) throw new Error("본문을 작성한 뒤 발행해 주세요.");
   }
-  return document;
+  return normalizeDraftMetadata(document);
 }
 
 // 편집 문서의 글 상세 표시 데이터 변환
 export function toArticlePost(document: BlogDocument): Post {
+  const normalized = normalizeDraftMetadata(document);
   return {
-    slug: document.slug || "draft-" + document.id,
-    title: document.title || "제목 없는 글",
-    description: document.description,
-    category: document.category || "개발 기록",
-    date: document.date || document.updatedAt.slice(0, 10),
-    readingMinutes: document.readingMinutes || estimateReadingMinutes(document.content),
-    heroImage: document.heroImage,
+    slug: normalized.slug || "draft-" + normalized.id,
+    title: normalized.title || "제목 없는 글",
+    subtitle: normalized.subtitle,
+    description: normalized.description,
+    category: normalized.category || "개발 기록",
+    date: normalized.date || normalized.updatedAt.slice(0, 10),
+    readingMinutes: normalized.readingMinutes || estimateReadingMinutes(normalized.content),
+    heroImage: normalized.heroImage,
     sections: [],
-    document: document.content,
+    document: normalized.content,
   };
 }

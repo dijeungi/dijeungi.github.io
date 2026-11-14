@@ -2,6 +2,7 @@ import { test } from "node:test";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { strict } from "node:assert";
+import { request } from "node:http";
 import { promisify } from "node:util";
 import { randomUUID } from "node:crypto";
 import { execFile } from "node:child_process";
@@ -50,7 +51,7 @@ function document(overrides = {}) {
     version: 1,
     id: randomUUID(),
     slug: "editor-test-post",
-    title: "로컬 편집기 테스트",
+    title: "Editor test post",
     description: "발행 연결을 확인하는 격리된 테스트입니다.",
     category: "Engineering",
     date: "2026-11-14",
@@ -59,6 +60,18 @@ function document(overrides = {}) {
     content: { type: "doc", content: [{ type: "paragraph", content: [{ type: "text", text: "직접 작성한 본문입니다." }] }] },
     ...overrides,
   };
+}
+
+// 전송 계층에서 원래 Host와 중복 헤더를 보존한 응답 코드 확인
+function requestStatus(url, headers) {
+  return new Promise((resolve, reject) => {
+    const outgoing = request(url, { headers, signal: AbortSignal.timeout(5000) }, (response) => {
+      response.once("end", () => resolve(response.statusCode));
+      response.resume();
+    });
+    outgoing.once("error", reject);
+    outgoing.end();
+  });
 }
 
 test("임시 저장은 공개 파일을 만들지 않으며 이전 버전의 동시 덮어쓰기를 거부한다", async (context) => {
@@ -108,16 +121,20 @@ test("이미지를 재작성한 글만 커밋하며 다른 스테이징과 READM
   strict.equal(await git(remote, "rev-parse", "main"), result.commit);
 });
 
-test("필수 입력과 주소 충돌을 발행 파일 복사 전에 확인한다", async (context) => {
+test("필수 입력은 발행 전에 확인하고 예약 주소와 다른 글의 주소 충돌은 자동 해소한다", async (context) => {
   const { appRoot, service } = await fixture(context);
   const image = await service.uploadMedia(tinyPng, "그림.png");
   await strict.rejects(service.publish(document({ title: "", heroImage: image })));
   await strict.rejects(readFile(join(appRoot, "public", image.src.slice(1))), { code: "ENOENT" });
-  await strict.rejects(service.publish(document({ slug: "reserved-example" })), { code: "SLUG_CONFLICT" });
+  const reserved = await service.publish(document({ title: "Reserved example", slug: "" }));
+  strict.equal(reserved.slug, "reserved-example-2");
   const source = document();
   const result = await service.publish(source);
-  await strict.rejects(service.publish(document()), { code: "SLUG_CONFLICT" });
-  await strict.rejects(service.publish({ ...result.draft, slug: "changed-address" }), { code: "SLUG_IMMUTABLE" });
+  const duplicate = await service.publish(document());
+  strict.equal(duplicate.slug, "editor-test-post-2");
+  const edited = await service.publish({ ...result.draft, title: "다른 제목", slug: "changed-address" });
+  strict.equal(edited.slug, "editor-test-post");
+  strict.equal((await service.readDraft(result.draft.id)).slug, "editor-test-post");
 });
 
 test("푸시 실패 후 같은 글을 다시 발행하면 추가 커밋 없이 배포를 재시도한다", async (context) => {
@@ -229,4 +246,129 @@ test("로컬 API는 출처와 세션을 확인하고 끝 슬래시 및 원본 �
   strict.equal(badImage.status, 415);
   const tooLarge = await fetch(base + "/drafts", { method: "POST", headers, body: "x".repeat(2 * 1024 * 1024 + 1) });
   strict.equal(tooLarge.status, 413);
+});
+
+test("초안 주소는 제목 변경을 따라 자동 갱신하고 잘못된 수동 경로는 거부한다", async (context) => {
+  const { service } = await fixture(context);
+  const saved = await service.saveDraft(document({ title: "첫 번째 제목!", slug: "", subtitle: "" }));
+  strict.equal(saved.slug, "첫-번째-제목");
+  const renamed = await service.saveDraft({ ...saved, title: "다음 제목" });
+  strict.equal(renamed.slug, "다음-제목");
+  strict.equal((await service.readDraft(saved.id)).slug, "다음-제목");
+  await strict.rejects(service.saveDraft({ ...saved, title: "이전 창의 수정" }), { code: "DRAFT_CONFLICT" });
+  await strict.rejects(service.saveDraft(document({ slug: "../../README" })));
+});
+
+test("긴 한글 제목의 중복 주소도 UTF-8 파일 이름 제한 안에서 자동 생성한다", async (context) => {
+  const { service } = await fixture(context);
+  const title = "가".repeat(60);
+  const first = await service.publish(document({ title, slug: "" }));
+  const second = await service.publish(document({ title, slug: "" }));
+  strict.equal(Buffer.byteLength(first.slug), 180);
+  strict(second.slug.endsWith("-2"));
+  strict(Buffer.byteLength(second.slug) <= 180);
+  strict(Array.from(second.slug).length <= 96);
+  strict.notEqual(first.slug, second.slug);
+});
+
+test("문자와 숫자가 없는 제목도 문서 식별자 기반 주소로 발행한다", async (context) => {
+  const { service } = await fixture(context);
+  const source = document({ title: "😀 !!!", slug: "" });
+  const result = await service.publish(source);
+  strict.equal(result.slug, "post-" + source.id);
+  const renamed = await service.publish({ ...result.draft, title: "새로운 제목" });
+  strict.equal(renamed.slug, result.slug);
+});
+
+test("첫 본문 이미지를 실제 업로드 크기로 발행하고 독립 대표 이미지에는 의존하지 않는다", async (context) => {
+  const { appRoot, service } = await fixture(context);
+  const image = await service.uploadMedia(tinyPng, "본문 첫 이미지.png");
+  const source = document({
+    subtitle: "",
+    description: "남아 있으면 안 되는 과거 소개",
+    heroImage: { src: "/__editor/api/media/00000000-0000-4000-8000-000000000000", alt: "남은 독립 대표 이미지" },
+    content: { type: "doc", content: [{ type: "blockquote", content: [
+      { type: "paragraph", content: [{ type: "text", text: "본문에서 가져올 소개입니다." }] },
+      { type: "image", attrs: { src: image.src, alt: image.alt } },
+    ] }] },
+  });
+  const result = await service.publish(source);
+  const published = JSON.parse(await readFile(join(appRoot, "content/posts", result.slug + ".json"), "utf8"));
+  strict.equal(published.description, "본문에서 가져올 소개입니다.");
+  strict.equal(published.subtitle, "");
+  strict.equal(published.heroImage.src, published.content.content[0].content[1].attrs.src);
+  strict.equal(published.heroImage.width, 1);
+  strict.equal(published.heroImage.height, 1);
+  strict(published.heroImage.src.startsWith("/uploads/"));
+  strict(!JSON.stringify(published).includes("/__editor/"));
+});
+
+test("자동 충돌 주소로 커밋된 글은 푸시 재시도에서도 주소와 커밋을 유지한다", async (context) => {
+  let attempts = 0;
+  const { root, service, remote } = await fixture(context, {
+    push: async ({ git: runGit }) => {
+      attempts += 1;
+      if (attempts === 2) throw new Error("Simulated duplicate-title push outage");
+      await runGit(["push", "origin", "main"]);
+    },
+  });
+  await service.publish(document());
+  const duplicate = document();
+  let failedCommit;
+  await strict.rejects(service.publish(duplicate), (error) => {
+    strict.equal(error.code, "PUSH_FAILED");
+    failedCommit = error.commit;
+    return true;
+  });
+  strict.equal((await service.readDraft(duplicate.id)).slug, "editor-test-post-2");
+  const retried = await service.publish(duplicate);
+  strict.equal(retried.slug, "editor-test-post-2");
+  strict.equal(retried.commit, failedCommit);
+  strict.equal(await git(root, "rev-parse", "HEAD"), failedCommit);
+  strict.equal(await git(remote, "rev-parse", "main"), failedCommit);
+});
+
+test("저장 응답 재시도는 그사이 발생한 자동 주소 충돌을 사용자 편집 충돌로 보지 않는다", async (context) => {
+  const { service } = await fixture(context);
+  const source = document();
+  const saved = await service.saveDraft(source);
+  await service.publish(document());
+  const retried = await service.saveDraft(source);
+  strict.equal(saved.slug, "editor-test-post");
+  strict.equal(retried.id, saved.id);
+  strict.equal(retried.slug, "editor-test-post-2");
+  strict.equal((await service.readDraft(source.id)).slug, retried.slug);
+  await strict.rejects(service.saveDraft({ ...source, title: "오래된 창의 편집" }), { code: "DRAFT_CONFLICT" });
+});
+
+test("프록시의 원본 호스트도 루프백 한 개만 허용하고 세션 및 초안 우회를 차단한다", async (context) => {
+  const { service } = await fixture(context);
+  const running = await startEditorServer({ service, port: 0 });
+  context.after(() => running.close());
+  const base = "http://127.0.0.1:" + running.port;
+  const { token } = await (await fetch(base + "/session")).json();
+  for (const forwardedHost of ["localhost:3000", "127.0.0.1:3000", "[::1]:3000"]) {
+    const headers = { "X-Forwarded-Host": forwardedHost, "Sec-Fetch-Site": "same-origin" };
+    strict.equal((await fetch(base + "/session", { headers })).status, 200);
+    strict.equal((await fetch(base + "/drafts", { headers: { ...headers, "X-Editor-Token": token } })).status, 200);
+  }
+  for (const forwardedHost of ["", "attacker.invalid", "localhost.evil.invalid:3000", "localhost:3000, attacker.invalid", "attacker.invalid, localhost:3000", "localhost:3000, 127.0.0.1:3000", "localhost:3000@attacker.invalid", "localhost:3000/path"]) {
+    const headers = { "X-Forwarded-Host": forwardedHost, "Sec-Fetch-Site": "same-origin" };
+    strict.equal((await fetch(base + "/session", { headers })).status, 403, forwardedHost);
+    strict.equal((await fetch(base + "/drafts", { headers: { ...headers, "X-Editor-Token": token } })).status, 403, forwardedHost);
+  }
+  strict.equal(await requestStatus(base + "/session", { Host: "attacker.invalid", "X-Forwarded-Host": "localhost:3000" }), 403);
+  strict.equal(await requestStatus(base + "/session", { "X-Forwarded-Host": ["localhost:3000", "attacker.invalid"] }), 403);
+  strict.equal((await fetch(base + "/session", { headers: { Origin: "https://attacker.invalid", "X-Forwarded-Host": "localhost:3000" } })).status, 403);
+});
+
+test("기본 글 목록은 비어 있고 삭제한 예시 글 주소도 예약하지 않는다", async (context) => {
+  const { appRoot } = await fixture(context);
+  const service = createEditorService({ appRoot });
+  strict.deepEqual(await service.listDrafts(), []);
+  const result = await service.publish(document({ title: "Understanding React Rendering", slug: "" }));
+  strict.equal(result.slug, "understanding-react-rendering");
+  const drafts = await service.listDrafts();
+  strict.equal(drafts.length, 1);
+  strict.equal(drafts[0].id, result.draft.id);
 });

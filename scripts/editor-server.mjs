@@ -8,7 +8,7 @@ import { basename, dirname, join, relative, resolve } from "node:path";
 import { randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import { copyFile, lstat, mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
 
-import { parseBlogDocument } from "../app/shared/lib/content.ts";
+import { slugifyTitle, parseBlogDocument } from "../app/shared/lib/content.ts";
 
 const execFileAsync = promisify(execFile);
 const defaultAppRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -63,12 +63,14 @@ function identifyImage(bytes) {
   throw editorError(415, "PNG, JPEG, GIF, WebP 이미지만 업로드할 수 있습니다.");
 }
 
-// 발행 내용 비교에서 저장 시각 제외
+// 사용자 편집 비교에서 서버가 정한 주소와 저장 시각 제외
 function sameDraft(first, second) {
   const firstBody = { ...first };
   const secondBody = { ...second };
   delete firstBody.updatedAt;
   delete secondBody.updatedAt;
+  delete firstBody.slug;
+  delete secondBody.slug;
   return JSON.stringify(firstBody) === JSON.stringify(secondBody);
 }
 
@@ -112,6 +114,35 @@ export function createEditorService(options = {}) {
     return Promise.all(names.filter((name) => name.endsWith(".json")).map(async (name) => parseBlogDocument(JSON.parse(await readFile(join(postsRoot, name), "utf8")), { publish: true })));
   }
 
+  // 발행 주소는 고정하고 새 글의 제목 주소 충돌은 자동 해소
+  async function assignDocumentSlug(document) {
+    const published = await readPublishedDocuments();
+    const previous = published.find((item) => item.id === document.id);
+    if (previous) {
+      document.slug = previous.slug;
+      return document;
+    }
+    if (!document.title) {
+      document.slug = "";
+      return document;
+    }
+    const base = slugifyTitle(document.title) || "post-" + document.id;
+    const used = new Set([...reservedSlugs, ...published.map((item) => item.slug)]);
+    let slug = base;
+    let index = 1;
+    while (used.has(slug)) {
+      index += 1;
+      const suffix = "-" + index;
+      let stem = base;
+      while (Array.from(stem + suffix).length > 96 || Buffer.byteLength(stem + suffix) > 180) {
+        stem = Array.from(stem).slice(0, -1).join("").replace(/-$/g, "");
+      }
+      slug = stem + suffix;
+    }
+    document.slug = slug;
+    return document;
+  }
+
   // UUID에 한정한 임시 글 읽기
   async function readDraft(id) {
     if (!uuidPattern.test(id)) throw editorError(400, "글 식별자를 확인해 주세요.");
@@ -126,13 +157,14 @@ export function createEditorService(options = {}) {
 
   // 저장 시각과 변경 충돌을 확인한 임시 글 저장
   async function saveDraftRecord(value) {
-    const document = parseBlogDocument(value);
+    const document = await assignDocumentSlug(parseBlogDocument(value));
     await ensureDirectory(appRoot, draftsRoot);
     const path = join(draftsRoot, document.id + ".json");
     const existingBytes = await readOptional(path);
     const existing = existingBytes ? parseBlogDocument(JSON.parse(existingBytes.toString("utf8"))) : null;
-    if (existing && sameDraft(document, existing)) return existing;
-    if (existing && existing.updatedAt !== document.updatedAt) throw editorError(409, "다른 창에서 수정된 글입니다. 저장된 글을 다시 열어 주세요.", "DRAFT_CONFLICT");
+    const unchanged = existing !== null && sameDraft(document, existing);
+    if (unchanged && existing.slug === document.slug) return existing;
+    if (existing && !unchanged && existing.updatedAt !== document.updatedAt) throw editorError(409, "다른 창에서 수정된 글입니다. 저장된 글을 다시 열어 주세요.", "DRAFT_CONFLICT");
     document.updatedAt = new Date(Math.max(Date.now(), existing ? Date.parse(existing.updatedAt) + 1 : 0)).toISOString();
     await writeJson(path, document);
     return document;
@@ -193,6 +225,8 @@ export function createEditorService(options = {}) {
       if (!match || !uuidPattern.test(match[1])) throw editorError(400, "임시 이미지 주소를 확인해 주세요.");
       const item = await readMedia(match[1]);
       image.src = "/uploads/" + item.id + "." + item.extension;
+      image.width = item.width;
+      image.height = item.height;
       media.set(item.id, item);
     }
     // 본문 이미지 노드 순회
@@ -200,7 +234,7 @@ export function createEditorService(options = {}) {
       if (node.type === "image") await convertImage(node.attrs);
       for (const child of node.content || []) await visit(child);
     }
-    await convertImage(publication.heroImage);
+    if (publication.subtitle === undefined) await convertImage(publication.heroImage);
     await visit(publication.content);
     return { publication: parseBlogDocument(publication, { publish: true }), media: [...media.values()] };
   }
@@ -305,11 +339,16 @@ export function createEditorService(options = {}) {
   };
 }
 
+// 직접 요청과 프록시 원본 호스트의 루프백 경계 확인
+function isLoopbackHost(host) {
+  return typeof host === "string" && /^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/.test(host);
+}
+
 // 브라우저 요청의 루프백 출처 확인
 function isLoopbackOrigin(origin) {
   try {
     const url = new URL(origin);
-    return ["http:", "https:"].includes(url.protocol) && ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname) && url.origin === origin;
+    return ["http:", "https:"].includes(url.protocol) && isLoopbackHost(url.host) && url.origin === origin;
   } catch { return false; }
 }
 
@@ -342,7 +381,8 @@ export async function startEditorServer(options = {}) {
     try {
       const origin = request.headers.origin;
       const host = request.headers.host || "";
-      if (!/^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/.test(host) || (origin && !isLoopbackOrigin(origin)) || request.headers["sec-fetch-site"] === "cross-site") throw editorError(403, "내 컴퓨터의 편집기에서만 접근할 수 있습니다.");
+      const forwardedHost = request.headers["x-forwarded-host"];
+      if (!isLoopbackHost(host) || (forwardedHost !== undefined && !isLoopbackHost(forwardedHost)) || (origin && !isLoopbackOrigin(origin)) || request.headers["sec-fetch-site"] === "cross-site") throw editorError(403, "내 컴퓨터의 편집기에서만 접근할 수 있습니다.");
       const path = new URL(request.url || "/", "http://localhost").pathname.replace(/\/+$/, "") || "/";
       const method = request.method || "GET";
       if (method === "GET" && path === "/session") { sendJson(response, 200, { token }); return; }

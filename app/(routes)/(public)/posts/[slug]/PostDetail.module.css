@@ -215,6 +215,14 @@
   font-weight: 400;
   line-height: 24px;
 }
+.subtitle {
+  max-width: 760px;
+  margin: 12px 0 0;
+  color: #687487;
+  font-size: 18px;
+  font-weight: 400;
+  line-height: 28px;
+}
 .metaSeparator {
   color: #b8bec8;
 }

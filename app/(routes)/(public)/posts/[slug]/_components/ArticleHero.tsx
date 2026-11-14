@@ -1,6 +1,7 @@
 import Image from "next/image";
 
 import { formatPostDate } from "@/app/shared/lib/date";
+import { getFirstContentImage } from "@/app/shared/lib/content";
 
 import styles from "../PostDetail.module.css";
 
@@ -8,12 +9,16 @@ import type { ArticleReaderProps } from "../_types/reader";
 
 // 카테고리와 제목 및 대표 이미지 표시
 export function ArticleHero({ post }: ArticleReaderProps) {
+  const firstContentImage = post.document ? getFirstContentImage(post.document) : undefined;
+  const heroImage = post.heroImage?.src === firstContentImage?.src ? undefined : post.heroImage;
+
   return (
-    <section className={styles.hero + (post.heroImage ? " " + styles.heroWithMedia : "")} aria-labelledby="article-title">
+    <section className={styles.hero + (heroImage ? " " + styles.heroWithMedia : "")} aria-labelledby="article-title">
       <div className={styles.pageGrid + " " + styles.heroGrid}>
         <header className={styles.heading}>
           <p className={styles.category}>{post.category}</p>
           <h1 id="article-title">{post.title}</h1>
+          {post.subtitle && <p className={styles.subtitle}>{post.subtitle}</p>}
           <div className={styles.meta} aria-label="글 정보">
             <time dateTime={post.date}>
               {formatPostDate(post.date)}
@@ -23,14 +28,14 @@ export function ArticleHero({ post }: ArticleReaderProps) {
           </div>
         </header>
       </div>
-      {post.heroImage && (
+      {heroImage && (
         <div className={styles.heroMedia}>
           <Image
             className={styles.heroImage}
-            src={post.heroImage.src}
-            alt={post.heroImage.alt}
-            width={post.heroImage.width}
-            height={post.heroImage.height}
+            src={heroImage.src}
+            alt={heroImage.alt}
+            width={heroImage.width ?? 1600}
+            height={heroImage.height ?? 900}
             unoptimized
             preload
           />
