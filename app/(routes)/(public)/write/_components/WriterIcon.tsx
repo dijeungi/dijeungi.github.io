@@ -13,7 +13,6 @@ const paths: Record<WriterIconName, string> = {
   undo: "M8 5 3 10l5 5M3 10h10a6 6 0 0 1 0 12",
   redo: "m16 5 5 5-5 5M21 10H11a6 6 0 0 0 0 12",
   back: "M20 12H4m6-6-6 6 6 6",
-  close: "m6 6 12 12M18 6 6 18",
   check: "m5 12 4 4L19 6",
   plus: "M12 4v16M4 12h16",
   eye: "M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12zm13 0a3 3 0 1 0-6 0 3 3 0 0 0 6 0",

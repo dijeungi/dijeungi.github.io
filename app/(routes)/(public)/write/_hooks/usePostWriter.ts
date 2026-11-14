@@ -3,9 +3,9 @@
 import { useRouter } from "next/navigation";
 import { Image } from "@tiptap/extension-image";
 import { StarterKit } from "@tiptap/starter-kit";
-import { useCallback, useEffect, useRef, useState } from "react";
 import { useEditor, useEditorState } from "@tiptap/react";
 import { Placeholder } from "@tiptap/extension-placeholder";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { createEmptyDocument, isSafeContentUrl, parseBlogDocument, normalizeDraftMetadata } from "@/app/shared/lib/content";
 
@@ -17,14 +17,12 @@ const apiBase = "/__editor/api";
 
 // 편집기 요청 실패와 배포 재시도 정보
 class WriterRequestError extends Error {
-  code?: string;
   commit?: string;
 
   // 서버 오류와 발행 상태 보관
   constructor(message: string, details?: WriterErrorResponse) {
     super(message);
     this.name = "WriterRequestError";
-    this.code = details?.code;
     this.commit = details?.commit;
   }
 }
@@ -95,10 +93,11 @@ export function usePostWriter() {
   const [published, setPublished] = useState<PublishResult | null>(null);
   const [pendingCommit, setPendingCommit] = useState("");
 
-  // 현재 편집 중인 글을 메모리에서 갱신
+  // 편집 글의 메타데이터 정규화와 메모리 상태 반영
   const storeDraft = useCallback((next: BlogDocument) => {
-    draftRef.current = next;
-    setDraft(next);
+    const normalized = normalizeDraftMetadata(next);
+    draftRef.current = normalized;
+    setDraft(normalized);
   }, []);
 
   // 임시저장한 글의 식별자만 다음 방문을 위해 기억
@@ -113,11 +112,11 @@ export function usePostWriter() {
   // 저장 요청 없이 편집 중인 입력 갱신
   const updateDraft = useCallback((changes: Partial<BlogDocument>) => {
     if (!draftRef.current || publishBusyRef.current) return;
-    const next = normalizeDraftMetadata({
+    const next = {
       ...draftRef.current,
       ...changes,
       ...(changes.content ? { readingMinutes: 0 } : {}),
-    });
+    };
     revisionRef.current += 1;
     storeDraft(next);
     setDirty(true);
@@ -170,9 +169,8 @@ export function usePostWriter() {
 
   // 화면과 편집기에 같은 글 표시
   const displayDraft = useCallback((next: BlogDocument, saved = false) => {
-    const normalized = normalizeDraftMetadata({ ...next, subtitle: next.subtitle ?? "", readingMinutes: 0 });
     revisionRef.current += 1;
-    storeDraft(normalized);
+    storeDraft({ ...next, subtitle: next.subtitle ?? "", readingMinutes: 0 });
     setDirty(false);
     setPublished(null);
     setPendingCommit("");
@@ -185,6 +183,7 @@ export function usePostWriter() {
 
   useEffect(() => {
     if (!editor) return;
+    if (draftRef.current) editor.commands.setContent(draftRef.current.content, { emitUpdate: false });
     const controller = new AbortController();
     let active = true;
     void (async () => {
@@ -253,7 +252,7 @@ export function usePostWriter() {
         });
         const saved = parseBlogDocument(response.draft);
         if (draftRef.current?.id === snapshot.id) {
-          const latest = normalizeDraftMetadata({ ...draftRef.current, slug: saved.slug, updatedAt: saved.updatedAt });
+          const latest = { ...draftRef.current, slug: saved.slug, updatedAt: saved.updatedAt };
           storeDraft(latest);
           setLastSavedAt(saved.updatedAt);
           if (revisionRef.current === savedRevision) setDirty(false);
@@ -389,7 +388,7 @@ export function usePostWriter() {
       try {
         if (draftRef.current) {
           const response = await requestJson<{ draft: BlogDocument }>("/drafts/" + encodeURIComponent(draftRef.current.id), tokenRef.current);
-          const latest = normalizeDraftMetadata({ ...draftRef.current, slug: response.draft.slug, updatedAt: response.draft.updatedAt });
+          const latest = { ...draftRef.current, slug: response.draft.slug, updatedAt: response.draft.updatedAt };
           storeDraft(latest);
         }
       } catch {}

@@ -1,9 +1,9 @@
-import type { BlogDocument } from "@/app/shared/types/content";
 import type { usePostWriter } from "../_hooks/usePostWriter";
+import type { BlogDocument } from "@/app/shared/types/content";
 
 export type WriterConnection = "loading" | "ready" | "unavailable";
 
-export type WriterIconName = "bold" | "italic" | "strike" | "link" | "bullets" | "numbers" | "code" | "image" | "undo" | "redo" | "back" | "close" | "check" | "plus" | "eye" | "upload";
+export type WriterIconName = "bold" | "italic" | "strike" | "link" | "bullets" | "numbers" | "code" | "image" | "undo" | "redo" | "back" | "check" | "plus" | "eye" | "upload";
 
 export type DraftSummary = Pick<BlogDocument, "id" | "title" | "slug" | "updatedAt">;
 
@@ -23,7 +23,7 @@ export type WriterErrorResponse = {
   commit?: string;
 };
 
-export type PostWriterState = ReturnType<typeof usePostWriter>;
+type PostWriterState = ReturnType<typeof usePostWriter>;
 
 export type WriterToolbarProps = Pick<
   PostWriterState,

@@ -219,7 +219,7 @@ async function writerFixture(context, {
     act: (action) => { const result = action(value); render(); return result; },
     queue: (method, path, reply) => overrides.push({ method, path, reply }),
     edit: (next) => { editorContent = structuredClone(next); editorOptions.onUpdate({ editor: editorInstance }); render(); },
-    reconnectEditor: () => { editorInstance = { ...editorInstance }; changed = true; render(); },
+    reconnectEditor: () => { editorContent = createEmptyDocument(); editorInstance = { ...editorInstance }; changed = true; render(); },
     advanceTimers: () => {
       const scheduled = [...timers.values()];
       timers.clear();
@@ -237,7 +237,7 @@ test("기존 글의 부제와 첫 이미지로 메타데이터를 갱신하고 �
   assert.equal(fixture.value.uploadHeroImage, undefined);
   const first = { src: "/uploads/first.png", alt: "첫 이미지", width: 640, height: 360 };
   const second = { src: "/uploads/second.png", alt: "다음 이미지", width: 640, height: 360 };
-  const paragraph = { type: "paragraph", content: [{ type: "text", text: "이미지를 담은 본문" }] };
+  const paragraph = { type: "paragraph", content: [{ type: "text", text: "이미지를 담은 본문", marks: [{ type: "bold" }] }] };
   fixture.edit({ type: "doc", content: [paragraph, { type: "image", attrs: first }, { type: "image", attrs: second }] });
   assert.deepEqual(fixture.value.draft.heroImage, first);
   assert.equal(fixture.value.draft.description, "이미지를 담은 본문");
@@ -253,12 +253,14 @@ test("기존 글의 부제와 첫 이미지로 메타데이터를 갱신하고 �
   fixture.reconnectEditor();
   await fixture.flush();
   assert.deepEqual(fixture.value.draft, current);
+  assert.deepEqual(fixture.editorContent, current.content);
   assert.equal(fixture.value.dirty, true);
   fixture.queue("GET", "/session", () => response({ error: "모의 재연결 실패" }, 503));
   fixture.reconnectEditor();
   await fixture.flush();
   assert.equal(fixture.value.connection, "unavailable");
   assert.deepEqual(fixture.value.draft, current);
+  assert.deepEqual(fixture.editorContent, current.content);
   assert.equal(fixture.value.dirty, true);
 });
 
