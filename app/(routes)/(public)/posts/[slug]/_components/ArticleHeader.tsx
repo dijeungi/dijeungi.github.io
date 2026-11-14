@@ -1,5 +1,3 @@
-import Link from "next/link";
-
 import { ShareIcon } from "./ShareIcon";
 import { SiteBrand } from "@/app/shared/components/SiteBrand";
 
@@ -18,14 +16,12 @@ export function ArticleHeader({
   headerRef,
   shareStatus,
 }: ArticleHeaderProps) {
-  const showEditor = process.env.NODE_ENV === "development";
-
   return (
     <header
       ref={headerRef}
       className={isReading ? styles.readerHeader + " " + styles.reading : styles.readerHeader}
     >
-      <div className={styles.headerInner + " " + frameStyles.content + (showEditor ? " " + styles.withEditor : "")}>
+      <div className={styles.headerInner + " " + frameStyles.content}>
         <div className={styles.headerTitles}>
           <SiteBrand className={styles.brand} />
           <button
@@ -37,7 +33,6 @@ export function ArticleHeader({
             {title}
           </button>
         </div>
-        {showEditor && <Link className={styles.editorLink} href="/write/">글쓰기</Link>}
         <button
           className={styles.shareButton}
           type="button"

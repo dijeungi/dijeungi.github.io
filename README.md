@@ -36,7 +36,7 @@ npm run dev
 
 ## 글쓰기
 
-`npm run dev`는 블로그와 기기 내부의 글 저장 서버를 함께 실행합니다. 로컬 홈 우측 하단의 `+` 버튼을 누르거나 [로컬 글쓰기 화면](http://localhost:3000/write/)에서 제목, 카테고리, 날짜와 본문을 작성합니다. `+` 버튼은 개발 서버에서만 표시됩니다. 개발 서버가 다른 포트를 사용하면 터미널에 표시된 주소 뒤에 `/write/`를 붙입니다.
+`npm run dev`는 블로그와 기기 내부의 글 저장 서버를 함께 실행합니다. 로컬 홈과 글 상세 우측 하단의 공통 `+` 버튼을 누르거나 [로컬 글쓰기 화면](http://localhost:3000/write/)에서 제목, 카테고리, 날짜와 본문을 작성합니다. `+` 버튼은 개발 서버에서만 표시되며, 글쓰기 미리보기에는 표시하지 않습니다. 개발 서버가 다른 포트를 사용하면 터미널에 표시된 주소 뒤에 `/write/`를 붙입니다.
 
 - 본문에서 소제목, 굵게, 기울임, 목록, 인용과 코드 블록을 사용할 수 있습니다.
 - 이미지와 대표 이미지를 올리고 설명을 입력할 수 있습니다.
@@ -117,6 +117,7 @@ npm run build
 - `app/shared/lib/content.ts`: 글 데이터와 편집기 본문 검증
 - `app/(routes)/(public)/write/`: 로컬 글쓰기 화면과 동작
 - `app/(routes)/(public)/write/page.dev.tsx`: 개발 서버에서만 등록되는 글쓰기 페이지
+- `app/(routes)/(public)/write/_components/WriteButton.tsx`: 홈과 상세의 로컬 전용 글쓰기 버튼
 - `scripts/editor-server.mjs`: 로컬 임시저장, 이미지 업로드와 발행 API
 - `scripts/dev.mjs`: 블로그 개발 서버와 글쓰기 API 실행
 - `app/shared/constants/site.ts`: 사이트 이름과 소개

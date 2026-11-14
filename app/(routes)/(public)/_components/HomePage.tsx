@@ -5,7 +5,7 @@ import Image from "next/image";
 
 import { GitHubOverview } from "./GitHubOverview";
 import { useHomePosts } from "../_hooks/useHomePosts";
-import { WriterIcon } from "../write/_components/WriterIcon";
+import { WriteButton } from "../write/_components/WriteButton";
 import { formatPostDate } from "@/app/shared/lib/date";
 import { siteName } from "@/app/shared/constants/site";
 import { SiteBrand } from "@/app/shared/components/SiteBrand";
@@ -28,7 +28,6 @@ export function HomePage({ posts, github }: HomePageProps) {
     selectPage,
     selectCategory,
   } = useHomePosts(posts);
-  const showEditor = process.env.NODE_ENV === "development";
 
   return (
     <div className={styles.home + " " + frameStyles.frame}>
@@ -147,11 +146,7 @@ export function HomePage({ posts, github }: HomePageProps) {
         )}
       </div>
       <footer className={styles.footer + " " + frameStyles.content}>© {new Date().getUTCFullYear()} {siteName}</footer>
-      {showEditor && (
-        <Link className={styles.writeButton} href="/write/" aria-label="글쓰기">
-          <WriterIcon className={styles.writeButtonIcon} name="plus" width={24} height={24} />
-        </Link>
-      )}
+      <WriteButton />
     </div>
   );
 }

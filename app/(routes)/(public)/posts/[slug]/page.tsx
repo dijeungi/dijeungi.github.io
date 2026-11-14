@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 
 import { ArticleReader } from "./_components/ArticleReader";
+import { WriteButton } from "../../write/_components/WriteButton";
 import { getAllPosts, getPostBySlug } from "@/app/shared/data/published-posts";
 
 import type { Metadata } from "next";
@@ -55,5 +56,10 @@ export default async function PostPage({
     notFound();
   }
 
-  return <ArticleReader key={post.slug} post={post} commentsEnabled />;
+  return (
+    <>
+      <ArticleReader key={post.slug} post={post} commentsEnabled />
+      <WriteButton />
+    </>
+  );
 }
