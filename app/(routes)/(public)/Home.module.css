@@ -46,7 +46,37 @@
 .headerInner {
   display: flex;
   align-items: center;
+  gap: 16px;
   height: 100%;
+}
+.socialLinks {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 20px;
+  margin-inline-start: auto;
+}
+.socialLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 44px;
+  color: #687487;
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.socialLink:hover {
+  color: var(--home-blue);
+  text-decoration: none;
+}
+.socialLink:focus-visible {
+  outline: 2px solid var(--home-blue);
+  outline-offset: 4px;
+}
+.externalLinkIcon {
+  flex-shrink: 0;
+  font-size: 12px;
 }
 .layout {
   display: grid;
@@ -405,6 +435,12 @@
   .home {
     --sidebar-width: 84px;
     --home-column-gap: 12px;
+  }
+  .headerInner {
+    gap: 12px;
+  }
+  .socialLinks {
+    gap: 12px;
   }
   .layout {
     padding-top: 28px;

@@ -9,6 +9,7 @@
 - 메인 목록은 왼쪽 가로형 썸네일과 오른쪽 글 정보로 구성합니다. 썸네일과 텍스트 영역의 위아래 높이를 맞추고, 별도 목록 제목과 작성자 배지는 표시하지 않습니다. 대표 이미지가 없는 글에는 카테고리 썸네일을 표시합니다.
 - 메인과 상세 헤더는 `app/shared/styles/PageFrame.module.css`의 공통 컨테이너를 사용해 좌우 시작점과 끝점을 맞춥니다. 실제 내용 폭은 최대 1120px이며, 상세 대표 이미지의 최대 1440px과 바깥 그리드의 최대 1800px과 구분합니다.
 - 메인과 상세 진입 시의 브랜드 링크는 `app/shared/components/SiteBrand.tsx`를 공유합니다. 글자 크기 20px, 굵기 500, 자간 -0.03em과 색상을 한 곳에서 관리하며 600px 이하에서는 함께 18px로 줄입니다.
+- 메인 헤더 오른쪽에는 GitHub와 LinkedIn 프로필 링크를 표시하고, 각각 새 탭에서 엽니다.
 - 글 상세에서는 상단 고정 제목, 읽기 진행률, 링크와 코드 복사를 제공합니다.
 - 글 상세는 흰 배경에 파란 카테고리 배지와 굵은 제목, 날짜와 읽기 시간을 왼쪽 정렬합니다. 부설명은 표시하지 않습니다.
 - 1800px 최대 그리드 안에서 제목 영역은 최대 1120px, 본문은 6열을 사용합니다.
@@ -120,7 +121,7 @@ npm run build
 - `app/(routes)/(public)/write/_components/WriteButton.tsx`: 홈과 상세의 로컬 전용 글쓰기 버튼
 - `scripts/editor-server.mjs`: 로컬 임시저장, 이미지 업로드와 발행 API
 - `scripts/dev.mjs`: 블로그 개발 서버와 글쓰기 API 실행
-- `app/shared/constants/site.ts`: 사이트 이름과 소개
+- `app/shared/constants/site.ts`: 사이트 이름, 소개와 LinkedIn 프로필 주소
 - `app/shared/components/SiteBrand.tsx`: 메인과 상세의 공통 브랜드 링크
 - `app/shared/components/SiteBrand.module.css`: 브랜드 타이포그래피와 모바일 크기
 - `app/styles/`: 공통 reset, 레이아웃 토큰과 타이포그래피
