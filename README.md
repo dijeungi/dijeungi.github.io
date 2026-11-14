@@ -41,7 +41,7 @@ npm run dev
 - 발행한 본문은 `content/posts/<글 주소>.json`, 이미지는 `public/uploads/`에 저장합니다.
 - 발행 버튼은 해당 글과 이미지만 커밋한 뒤 `git push origin main`으로 블로그 저장소에 반영합니다. 자동 배포가 끝나면 공개 사이트에 표시됩니다.
 
-글쓰기 기능을 처음 사용하기 전에는 이 기능의 코드 변경을 먼저 커밋해야 합니다. 기기 내부 저장 서버는 GitHub Pages에 배포되지 않으므로 글 저장과 발행은 로컬 주소에서 진행합니다.
+글쓰기 기능을 처음 사용하기 전에는 이 기능의 코드 변경을 먼저 커밋해야 합니다. 공개 빌드에는 `/write/` 페이지를 내보내지 않아 해당 주소는 404로 처리됩니다. 기기 내부 저장 서버도 GitHub Pages에 배포되지 않으므로 글 저장과 발행은 로컬 주소에서 진행합니다.
 
 읽는 시간을 `0`으로 두면 본문 길이를 기준으로 계산합니다. 글 소개는 검색 메타데이터에 사용하며 제목 아래 부설명으로 표시하지 않습니다.
 
@@ -66,6 +66,7 @@ npm run build
 - `app/shared/data/published-posts.ts`: 직접 발행한 글과 샘플 글 조회
 - `app/shared/lib/content.ts`: 글 데이터와 편집기 본문 검증
 - `app/(routes)/(public)/write/`: 로컬 글쓰기 화면과 동작
+- `app/(routes)/(public)/write/page.dev.tsx`: 개발 서버에서만 등록되는 글쓰기 페이지
 - `scripts/editor-server.mjs`: 로컬 임시저장, 이미지 업로드와 발행 API
 - `scripts/dev.mjs`: 블로그 개발 서버와 글쓰기 API 실행
 - `app/shared/constants/site.ts`: 사이트 이름과 소개

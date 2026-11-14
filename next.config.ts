@@ -7,6 +7,9 @@ export default function createNextConfig(phase: string): NextConfig {
   const isDevelopment = phase === PHASE_DEVELOPMENT_SERVER;
   const nextConfig: NextConfig = {
     output: isDevelopment ? undefined : "export",
+    pageExtensions: isDevelopment
+      ? ["dev.tsx", "tsx", "ts", "jsx", "js"]
+      : ["tsx", "ts", "jsx", "js"],
     trailingSlash: true,
     basePath: process.env.NEXT_PUBLIC_BASE_PATH || "",
     reactCompiler: true,
