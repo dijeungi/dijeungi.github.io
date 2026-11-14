@@ -1,3 +1,4 @@
+import type { GitHubOverview } from "./github";
 import type { Post } from "@/app/shared/data/posts";
 
 export type HomePost = Pick<
@@ -5,7 +6,9 @@ export type HomePost = Pick<
   "slug" | "title" | "description" | "category" | "date" | "readingMinutes" | "heroImage"
 >;
 
-export type HomePageProps = { posts: HomePost[] };
+export type HomePageProps = { posts: HomePost[]; github: GitHubOverview };
+
+export type GitHubOverviewProps = Pick<HomePageProps, "github">;
 
 export type HomeCategory = { name: string; count: number };
 

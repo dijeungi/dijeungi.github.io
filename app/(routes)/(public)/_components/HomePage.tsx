@@ -3,6 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 
+import { GitHubOverview } from "./GitHubOverview";
 import { useHomePosts } from "../_hooks/useHomePosts";
 import { formatPostDate } from "@/app/shared/lib/date";
 import { siteName } from "@/app/shared/constants/site";
@@ -13,7 +14,7 @@ import frameStyles from "@/app/shared/styles/PageFrame.module.css";
 import type { HomePageProps } from "../_types/home";
 
 // 카테고리 탐색과 왼쪽 썸네일을 갖춘 글 목록
-export function HomePage({ posts }: HomePageProps) {
+export function HomePage({ posts, github }: HomePageProps) {
   const {
     categories,
     currentPage,
@@ -39,6 +40,8 @@ export function HomePage({ posts }: HomePageProps) {
           </nav>
         </div>
       </header>
+
+      <GitHubOverview github={github} />
 
       <div className={styles.layout + " " + frameStyles.content}>
         <aside className={styles.sidebar}>

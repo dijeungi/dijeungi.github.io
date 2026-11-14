@@ -4,6 +4,7 @@
 
 ## 화면
 
+- 메인 상단에는 GitHub 프로필 사진, 이름, 아이디와 Bio를 왼쪽에, 연도별 활동 달력을 오른쪽에 표시합니다. 연도 선택으로 가입 연도부터의 공개 활동을 볼 수 있습니다.
 - 기본 주소 `/`에서 발행 글과 예시 글을 한 페이지에 5개씩 표시합니다. 왼쪽 세로 카테고리를 선택하면 해당 글만 볼 수 있고 첫 페이지로 돌아갑니다. 하단에는 최대 5개의 페이지 번호와 이전/다음 버튼을 표시합니다.
 - 메인 목록은 왼쪽 가로형 썸네일과 오른쪽 글 정보로 구성합니다. 썸네일과 텍스트 영역의 위아래 높이를 맞추고, 별도 목록 제목과 작성자 배지는 표시하지 않습니다. 대표 이미지가 없는 글에는 카테고리 썸네일을 표시합니다.
 - 메인과 상세 헤더는 `app/shared/styles/PageFrame.module.css`의 공통 컨테이너를 사용해 좌우 시작점과 끝점을 맞춥니다. 실제 내용 폭은 최대 1120px이며, 상세 대표 이미지와 바깥 그리드의 최대 1800px과 구분합니다.
@@ -47,6 +48,15 @@ npm run dev
 
 읽는 시간을 `0`으로 두면 본문 길이를 기준으로 계산합니다. 글 소개는 검색 메타데이터에 사용하며 제목 아래 부설명으로 표시하지 않습니다.
 
+## GitHub 프로필과 활동
+
+공개 프로필과 가입 연도부터 현재 연도까지의 활동을 빌드 시 GitHub에서 가져옵니다. 정적 사이트이므로 프로필 변경과 새 활동은 다음 빌드 및 배포에 반영됩니다. GitHub 조회가 실패하면 `app/(routes)/(public)/_data/github-snapshot.json`에 보관한 공개 데이터를 사용합니다. 활동 달력에는 해당 연도 데이터의 확인 날짜를 표시하며, 아직 확인할 수 없는 미래 날짜를 비워 둡니다.
+
+- 잔디의 합계와 일별 숫자는 GitHub 공개 캘린더의 실제 기여 수입니다. 커밋 외에 PR 등도 포함하므로 `기여`로 표시합니다.
+- 빌드 환경에 `GITHUB_TOKEN`이 있으면 GraphQL API로 연간 커밋 수를 별도 조회합니다. 권한이 없거나 조회가 실패하면 커밋 수는 표시하지 않습니다. 로컬에서는 토큰 없이 프로필과 잔디를 사용할 수 있습니다.
+- 배포 워크플로는 GitHub Actions의 기본 토큰을 빌드 단계에만 전달합니다. 토큰은 브라우저 데이터와 정적 결과물에 포함하지 않습니다.
+- 방문자의 브라우저에서 GitHub API를 호출하지 않습니다. 연도를 바꿀 때는 빌드에 포함한 공개 데이터를 사용합니다.
+
 ## 댓글
 
 발행한 글 상세의 본문 아래에 [giscus](https://giscus.app/ko) 댓글을 표시합니다. 방문자는 GitHub 계정으로 로그인해 댓글을 남길 수 있으며, 댓글은 [블로그 저장소의 Discussions](https://github.com/dijeungi/dijeungi.github.io/discussions)에 보관합니다.
@@ -73,6 +83,12 @@ npm run build
 - `app/(routes)/(public)/page.tsx`: 메인 목록 데이터와 검색 메타데이터
 - `app/(routes)/(public)/_components/HomePage.tsx`: 카테고리와 글 목록
 - `app/(routes)/(public)/_hooks/useHomePosts.ts`: 카테고리 집계, 목록 선택과 페이지 이동
+- `app/(routes)/(public)/_components/GitHubOverview.tsx`: 상단 GitHub 프로필과 연간 활동 달력
+- `app/(routes)/(public)/_hooks/useGitHubCalendar.ts`: 활동 연도 선택과 주별 달력 배치
+- `app/(routes)/(public)/_lib/github.server.ts`: 빌드 전용 공개 프로필과 활동 조회
+- `app/(routes)/(public)/_lib/github-calendar.ts`: 실제 일별 기여 수 파싱과 보관 데이터 검증
+- `app/(routes)/(public)/_data/github-snapshot.json`: 조회 실패에 대비한 공개 데이터
+- `app/(routes)/(public)/GitHubOverview.module.css`: 프로필과 활동 달력 전용 스타일
 - `app/(routes)/(public)/Home.module.css`: 메인 페이지 전용 스타일
 - `app/(routes)/(public)/posts/[slug]/page.tsx`: 글별 정적 페이지와 메타데이터
 - `app/(routes)/(public)/posts/[slug]/_components/`: 글 상세 조합, 헤더, 제목 영역과 본문

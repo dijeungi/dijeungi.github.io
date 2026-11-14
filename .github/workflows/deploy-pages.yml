@@ -37,6 +37,8 @@ jobs:
         run: npm ci
       - name: Build static site
         run: npm run build
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v4
         with:
