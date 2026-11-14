@@ -43,3 +43,24 @@ export type GitHubSnapshotYear = {
   counts: number[];
   levels: string;
 };
+
+export type GitHubTooltipAnchor = Pick<DOMRect, "left" | "right" | "top" | "bottom">;
+
+export type GitHubTooltipPosition = {
+  left: number;
+  top: number;
+  arrowLeft: number;
+  placement: "top" | "bottom";
+};
+
+export type GitHubTooltipTarget = {
+  date: string;
+  rect: GitHubTooltipAnchor;
+  source: "pointer" | "keyboard";
+};
+
+export type GitHubTooltipData = {
+  date: string;
+  count: number;
+  position: GitHubTooltipPosition | null;
+};

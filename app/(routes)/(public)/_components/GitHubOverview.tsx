@@ -2,8 +2,11 @@
 
 import Image from "next/image";
 
+import { GitHubYearSelect } from "./GitHubYearSelect";
 import { useGitHubOverview } from "../_hooks/useGitHubOverview";
 import { useGitHubCalendar } from "../_hooks/useGitHubCalendar";
+import { GitHubCalendarTooltip } from "./GitHubCalendarTooltip";
+import { useGitHubCalendarTooltip } from "../_hooks/useGitHubCalendarTooltip";
 
 import styles from "../GitHubOverview.module.css";
 import frameStyles from "@/app/shared/styles/PageFrame.module.css";
@@ -20,6 +23,7 @@ export function GitHubOverview({ github }: GitHubOverviewProps) {
   const { profile, updatedAt } = overview;
   const displayName = profile.name || profile.login;
   const { cells, months, asOfDate, weekCount, selectedYear, availableYears, selectYear } = useGitHubCalendar(overview.years, updatedAt);
+  const { tooltip, tooltipRef, viewportRef, tooltipId, onPointerOver, onKeyDown, keepTooltip, hideTooltip, scheduleHide } = useGitHubCalendarTooltip(selectedYear, profile);
   const hasCalendar = selectedYear !== null && selectedYear.days.length > 0;
   const gridColumns = "repeat(" + weekCount + ", minmax(0, 1fr))";
 
@@ -42,42 +46,39 @@ export function GitHubOverview({ github }: GitHubOverviewProps) {
             <h2 className={styles.total}>{selectedYear ? numberFormatter.format(selectedYear.totalContributions) + "회 기여" : "GitHub 활동"}</h2>
             {selectedYear?.totalCommits != null && <p className={styles.commits}>커밋 {numberFormatter.format(selectedYear.totalCommits)}회</p>}
           </div>
-          <label className={styles.yearLabel}>
-            <span className={styles.srOnly}>GitHub 활동 연도</span>
-            <select className={styles.yearSelect} value={selectedYear?.year ?? ""} disabled={availableYears.length === 0} onChange={(event) => selectYear(Number(event.currentTarget.value))}>
-              {availableYears.length === 0 && <option value="">연도</option>}
-              {availableYears.map((entry) => <option value={entry.year} key={entry.year}>{entry.year}년</option>)}
-            </select>
-          </label>
+          <GitHubYearSelect years={availableYears.map((entry) => entry.year)} selectedYear={selectedYear?.year ?? null} onSelect={(year) => { hideTooltip(); selectYear(year); }} />
         </div>
 
         {hasCalendar && selectedYear ? (
           <>
             <div
               className={styles.calendarViewport}
-              role="img"
-              aria-label={selectedYear.year + "년 GitHub 기여 달력. 총 " + numberFormatter.format(selectedYear.totalContributions) + "회 기여. " + asOfDate + " 조회 결과이며 진한 초록색일수록 기여가 많습니다."}
+              ref={viewportRef}
+              role="group"
+              aria-label={selectedYear.year + "년 GitHub 기여 달력. 총 " + numberFormatter.format(selectedYear.totalContributions) + "회 기여. " + asOfDate + " 조회 결과이며 진한 초록색일수록 기여가 많습니다. 방향키로 날짜별 활동을 확인할 수 있습니다."}
+              aria-describedby={tooltip ? tooltipId : undefined}
+              aria-keyshortcuts="ArrowLeft ArrowRight ArrowUp ArrowDown Home End Escape"
               tabIndex={0}
+              onPointerOver={onPointerOver}
+              onPointerLeave={scheduleHide}
+              onKeyDown={onKeyDown}
+              onBlur={hideTooltip}
             >
-              <div className={styles.calendarCanvas} aria-hidden="true">
-                <div className={styles.months} style={{ gridTemplateColumns: gridColumns }}>
-                  {months.map((month) => <span className={styles.month} key={month.label} style={{ gridColumnStart: month.column }}>{month.label}</span>)}
-                </div>
-                <div className={styles.calendarBody}>
-                  <div className={styles.weekdays}>{weekdays.map((day, index) => <span key={index}>{day}</span>)}</div>
-                  <div className={styles.days} style={{ gridTemplateColumns: gridColumns }}>
-                    {cells.map(({ day, isFuture }, index) => (
-                      <span
-                        className={styles.day + " " + (day === null ? styles.blank : levelClasses[isFuture ? 0 : day.level])}
-                        key={day?.date ?? "padding-" + index}
-                        data-date={day?.date}
-                        data-count={isFuture ? 0 : day?.count}
-                        data-level={isFuture ? 0 : day?.level}
-                        title={day !== null ? day.date + ": " + numberFormatter.format(isFuture ? 0 : day.count) + "회 기여" : undefined}
-                      />
-                    ))}
-                  </div>
-                </div>
+              <div className={styles.calendarCanvas} style={{ gridTemplateColumns: "18px " + gridColumns }} aria-hidden="true">
+                {months.map((month) => <span className={styles.month} key={month.label} style={{ gridColumnStart: month.column + 1 }}>{month.label}</span>)}
+                {weekdays.map((day, index) => day && (
+                  <span className={styles.weekday} key={index} style={{ gridRowStart: index + 2 }}><span>{day}</span></span>
+                ))}
+                {cells.map(({ day, isFuture }, index) => (
+                  <span
+                    className={styles.day + " " + (day === null ? styles.blank : levelClasses[isFuture ? 0 : day.level])}
+                    key={day?.date ?? "padding-" + index}
+                    style={{ gridColumnStart: Math.floor(index / 7) + 2, gridRowStart: index % 7 + 2 }}
+                    data-date={day?.date}
+                    data-count={isFuture ? 0 : day?.count}
+                    data-level={isFuture ? 0 : day?.level}
+                  />
+                ))}
               </div>
             </div>
             <div className={styles.calendarFooter}>
@@ -91,6 +92,7 @@ export function GitHubOverview({ github }: GitHubOverviewProps) {
           </>
         ) : <p className={styles.unavailable}>GitHub 활동 정보를 표시할 수 없습니다.</p>}
       </div>
+      <GitHubCalendarTooltip tooltip={tooltip} tooltipRef={tooltipRef} tooltipId={tooltipId} onEnter={keepTooltip} onLeave={scheduleHide} />
     </section>
   );
 }

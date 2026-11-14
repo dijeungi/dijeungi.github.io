@@ -58,7 +58,10 @@ npm run dev
 - 빌드 환경에 `GITHUB_TOKEN`이 있으면 GraphQL API로 초기 연간 커밋 수를 별도 조회합니다. 자동 갱신 API는 커밋 합계를 제공하지 않으므로 해당 연도 갱신 후에는 전체 기여 수만 표시합니다. 이전 커밋 수를 새 데이터와 섞지 않습니다.
 - 배포 워크플로는 GitHub Actions의 기본 토큰을 빌드 단계에만 전달합니다. 토큰은 브라우저 데이터와 정적 결과물에 포함하지 않습니다.
 - 브라우저 요청에는 토큰이나 로그인 정보를 포함하지 않습니다. 프로필과 잔디는 각각 검증하고 반영하므로 한쪽 조회가 실패해도 성공한 쪽은 갱신됩니다. 연도 선택은 갱신 뒤에도 유지됩니다.
-- 프로필 수정 시각으로 사진 URL 버전을 바꿔 사진도 다시 불러옵니다. 달력 하단에는 조회 날짜를 `2026. 10. 26` 형식으로 표시하며, 미래 날짜도 기여 0회와 같은 회색 칸으로 표시합니다. 연도 선택의 안쪽 여백은 사방 8px입니다.
+- 프로필 수정 시각으로 사진 URL 버전을 바꿔 사진도 다시 불러옵니다. 달력 하단에는 조회 날짜를 `2026. 10. 26` 형식으로 표시하며, 미래 날짜도 기여 0회와 같은 회색 칸으로 표시합니다. 연도 선택 버튼의 안쪽 여백은 왼쪽 12px, 나머지 방향은 8px입니다.
+- 월과 요일 및 잔디 칸은 하나의 grid에 배치하며, `GitHubOverview.module.css`의 `.calendarCanvas`에 있는 `gap: 3px` 한 값으로 가로와 세로 간격을 관리합니다.
+- 연도 선택은 흰 배경과 얇은 테두리의 커스텀 목록을 사용합니다. 버튼과 화살표 사이 간격은 6px이며, 화살표 오른쪽에도 버튼 안쪽 여백 8px을 확보합니다. 방향키, Home/End, Enter/Space, Escape와 연도 숫자 입력을 지원하며 바깥을 누르거나 포커스를 옮기면 닫힙니다.
+- 잔디를 가리키면 날짜와 실제 기여 수를 짙은 말풍선으로 표시합니다. 말풍선은 가로 스크롤 영역 밖에 배치하고 화면 가장자리를 피합니다. 포인터를 말풍선으로 옮겨도 유지되며 Escape, 연도 변경이나 화면 이동으로 닫힙니다. 달력에 탭으로 진입한 뒤 방향키와 Home/End로 날짜를 탐색할 수도 있습니다.
 
 ## 댓글
 
@@ -88,6 +91,11 @@ npm run build
 - `app/(routes)/(public)/_hooks/useHomePosts.ts`: 카테고리 집계, 목록 선택과 페이지 이동
 - `app/(routes)/(public)/_components/GitHubOverview.tsx`: 상단 GitHub 프로필과 연간 활동 달력
 - `app/(routes)/(public)/_hooks/useGitHubCalendar.ts`: 활동 연도 선택과 주별 달력 배치
+- `app/(routes)/(public)/_components/GitHubCalendarTooltip.tsx`: 날짜와 기여 수 말풍선
+- `app/(routes)/(public)/_hooks/useGitHubCalendarTooltip.ts`: 잔디 호버, 키보드 탐색과 말풍선 측정
+- `app/(routes)/(public)/_lib/github-tooltip.ts`: 화면 경계를 피하는 말풍선 위치 계산
+- `app/(routes)/(public)/_components/GitHubYearSelect.tsx`: 연도 선택 버튼과 커스텀 목록
+- `app/(routes)/(public)/_hooks/useGitHubYearSelect.ts`: 연도 목록 열림, 키보드 탐색과 외부 클릭 해제
 - `app/(routes)/(public)/_hooks/useGitHubOverview.ts`: 공개 정보 자동 조회, 화면 복귀, 캐시와 요청 해제
 - `app/(routes)/(public)/_lib/github-live.ts`: 브라우저 공개 응답과 프로필 사진 버전 검증
 - `app/(routes)/(public)/_lib/github.server.ts`: 빌드 전용 공개 프로필과 활동 조회
