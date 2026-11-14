@@ -43,7 +43,7 @@ export async function generateMetadata({
   };
 }
 
-// 글 주소별 상세 화면 구성
+// 실제 발행한 글 주소별 상세 화면 구성
 export default async function PostPage({
   params,
 }: {

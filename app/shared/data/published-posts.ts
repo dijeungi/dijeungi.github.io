@@ -46,5 +46,11 @@ export async function getAllPosts(): Promise<Post[]> {
 
 // 글 주소 기준 발행 본문 조회
 export async function getPostBySlug(slug: string): Promise<Post | undefined> {
-  return (await getAllPosts()).find((post) => post.slug.normalize("NFC") === slug.normalize("NFC"));
+  let normalizedSlug: string;
+  try {
+    normalizedSlug = decodeURIComponent(slug).normalize("NFC");
+  } catch {
+    return undefined;
+  }
+  return (await getAllPosts()).find((post) => post.slug.normalize("NFC") === normalizedSlug);
 }

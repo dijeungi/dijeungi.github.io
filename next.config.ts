@@ -1,15 +1,28 @@
+import { join } from "node:path";
+import { readdirSync } from "node:fs";
 import { PHASE_DEVELOPMENT_SERVER } from "next/constants";
 
 import type { NextConfig } from "next";
+
+// 실제 발행 파일이 있는 경우에만 정적 상세 경로 등록
+function hasPublishedPosts(): boolean {
+  try {
+    return readdirSync(join(process.cwd(), "content", "posts")).some((name) => name.endsWith(".json"));
+  } catch (error) {
+    if (error instanceof Error && "code" in error && error.code === "ENOENT") return false;
+    throw error;
+  }
+}
 
 // 정적 배포와 로컬 글쓰기 API 경로 구성
 export default function createNextConfig(phase: string): NextConfig {
   const isDevelopment = phase === PHASE_DEVELOPMENT_SERVER;
   const nextConfig: NextConfig = {
     output: isDevelopment ? undefined : "export",
-    pageExtensions: isDevelopment
-      ? ["dev.tsx", "tsx", "ts", "jsx", "js"]
-      : ["tsx", "ts", "jsx", "js"],
+    pageExtensions: [
+      ...(isDevelopment ? ["dev.tsx"] : hasPublishedPosts() ? ["post.tsx"] : []),
+      "tsx", "ts", "jsx", "js",
+    ],
     trailingSlash: true,
     basePath: process.env.NEXT_PUBLIC_BASE_PATH || "",
     reactCompiler: true,
