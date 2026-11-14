@@ -68,12 +68,12 @@ export function GitHubOverview({ github }: GitHubOverviewProps) {
                   <div className={styles.days} style={{ gridTemplateColumns: gridColumns }}>
                     {cells.map(({ day, isFuture }, index) => (
                       <span
-                        className={styles.day + " " + (day === null || isFuture ? styles.blank : levelClasses[day.level])}
+                        className={styles.day + " " + (day === null ? styles.blank : levelClasses[isFuture ? 0 : day.level])}
                         key={day?.date ?? "padding-" + index}
                         data-date={day?.date}
-                        data-count={day?.count}
-                        data-level={day?.level}
-                        title={day !== null && !isFuture ? day.date + ": " + numberFormatter.format(day.count) + "회 기여" : undefined}
+                        data-count={isFuture ? 0 : day?.count}
+                        data-level={isFuture ? 0 : day?.level}
+                        title={day !== null ? day.date + ": " + numberFormatter.format(isFuture ? 0 : day.count) + "회 기여" : undefined}
                       />
                     ))}
                   </div>
@@ -81,7 +81,7 @@ export function GitHubOverview({ github }: GitHubOverviewProps) {
               </div>
             </div>
             <div className={styles.calendarFooter}>
-              <p className={styles.updated}>{asOfDate.replaceAll("-", ".")} 조회</p>
+              <p className={styles.updated}>{asOfDate.replaceAll("-", ". ")} 조회</p>
               <div className={styles.legend} aria-label="기여 횟수는 옅은 색에서 진한 색까지 다섯 단계로 표시됩니다.">
                 <span>적음</span>
                 {levelClasses.map((level, index) => <span className={styles.legendCell + " " + level} key={index} aria-hidden="true" />)}

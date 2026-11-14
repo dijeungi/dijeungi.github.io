@@ -12,7 +12,7 @@
 .total { margin: 0; color: #252d3a; font-size: 17px; font-weight: 500; line-height: 26px; letter-spacing: -0.025em; }
 .commits { margin: 2px 0 0; color: #6b7684; font-size: 12px; line-height: 18px; }
 .yearLabel { flex-shrink: 0; }
-.yearSelect { min-width: 94px; min-height: 36px; padding: 6px 10px; border: 1px solid #e5e9ef; border-radius: 7px; background: #fff; color: #4e5968; font: inherit; font-size: 13px; line-height: 22px; }
+.yearSelect { min-height: 36px; padding: 8px; border: 1px solid #e5e9ef; border-radius: 7px; background: #fff; color: #4e5968; font: inherit; font-size: 13px; line-height: 18px; }
 .calendarViewport { overflow-x: auto; padding-bottom: 4px; scrollbar-width: thin; }
 .calendarViewport:focus-visible { outline: 2px solid #3182f6; outline-offset: 4px; border-radius: 3px; }
 .calendarCanvas { min-width: 560px; }
@@ -48,5 +48,4 @@
   .name { font-size: 20px; line-height: 28px; }
   .bio { font-size: 13px; line-height: 21px; }
   .total { font-size: 16px; line-height: 24px; }
-  .yearSelect { min-width: 86px; }
 }
