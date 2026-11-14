@@ -1,7 +1,7 @@
 import { join } from "node:path";
 import { readdir, readFile, stat } from "node:fs/promises";
 
-import { parseBlogDocument, toArticlePost } from "../lib/content";
+import { MAX_POST_BYTES, parseBlogDocument, toArticlePost } from "../lib/content";
 
 import type { Post } from "../types/post";
 import type { BlogDocument } from "../types/content";
@@ -23,7 +23,7 @@ async function readPublishedDocuments(): Promise<BlogDocument[]> {
     try {
       if (!entry.isFile()) throw new Error("발행 글은 일반 JSON 파일이어야 합니다.");
       const filename = join(directory, entry.name);
-      if ((await stat(filename)).size > 2_000_000) throw new Error("발행 글 파일이 너무 큽니다.");
+      if ((await stat(filename)).size > MAX_POST_BYTES) throw new Error("발행 글 파일이 너무 큽니다.");
       const document = parseBlogDocument(JSON.parse(await readFile(filename, "utf8")), { publish: true });
       const slug = document.slug.normalize("NFC");
       if (entry.name.normalize("NFC") !== slug + ".json") throw new Error("파일 이름과 글 주소가 다릅니다.");

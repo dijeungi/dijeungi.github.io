@@ -5,7 +5,7 @@ import { readFile } from "node:fs/promises";
 import { runInNewContext } from "node:vm";
 import typescript from "typescript";
 
-import { parseBlogDocument, toArticlePost } from "../app/shared/lib/content.ts";
+import { MAX_POST_BYTES, parseBlogDocument, toArticlePost } from "../app/shared/lib/content.ts";
 
 const source = await readFile(new URL("../app/shared/data/published-posts.ts", import.meta.url), "utf8");
 const compiled = typescript.transpileModule(source, {
@@ -33,7 +33,7 @@ function publication(overrides = {}) {
 // 발행 조회 소스를 실제 파서와 메모리 파일 시스템으로 실행
 function createLoader(files = new Map(), failure = null) {
   const reads = [];
-  const module = { exports: {} };
+  const loaded = { exports: {} };
   const directory = join("/virtual-blog", "content", "posts");
 
   // 가상 발행 디렉터리 안의 JSON만 읽기
@@ -45,13 +45,13 @@ function createLoader(files = new Map(), failure = null) {
   }
 
   runInNewContext(compiled, {
-    module,
+    module: loaded,
     Error,
-    exports: module.exports,
+    exports: loaded.exports,
     process: { cwd: () => "/virtual-blog" },
     require: (specifier) => {
       if (specifier === "node:path") return { join };
-      if (specifier === "../lib/content") return { parseBlogDocument, toArticlePost };
+      if (specifier === "../lib/content") return { MAX_POST_BYTES, parseBlogDocument, toArticlePost };
       if (specifier === "node:fs/promises") return {
         readdir: async (path, options) => {
           assert.equal(path, directory);
@@ -69,7 +69,7 @@ function createLoader(files = new Map(), failure = null) {
       throw new Error("검증에서 허용하지 않은 발행 조회 의존성입니다: " + specifier);
     },
   }, { filename: "published-posts.ts" });
-  return { loader: module.exports, reads };
+  return { loader: loaded.exports, reads };
 }
 
 test("한글과 NFD 및 percent 인코딩 주소는 같은 실제 파서 결과를 조회한다", async () => {

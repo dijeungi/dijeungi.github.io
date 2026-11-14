@@ -1,14 +1,17 @@
 import { test } from "node:test";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { strict } from "node:assert";
 import { request } from "node:http";
+import typescript from "typescript";
+import { strict } from "node:assert";
 import { promisify } from "node:util";
 import { randomUUID } from "node:crypto";
+import { runInNewContext } from "node:vm";
 import { execFile } from "node:child_process";
-import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 
 import { createEditorService, startEditorServer } from "../scripts/editor-server.mjs";
+import { MAX_POST_BYTES, parseBlogDocument, toArticlePost } from "../app/shared/lib/content.ts";
 
 const execFileAsync = promisify(execFile);
 const tinyPng = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jHYoAAAAASUVORK5CYII=", "base64");
@@ -62,6 +65,49 @@ function document(overrides = {}) {
   };
 }
 
+// 본문 구조 제한 안에서 지정한 UTF-8 발행 크기의 다문단 문서 구성
+function documentAtPublicationBytes(bytes) {
+  const source = parseBlogDocument(document({
+    readingMinutes: 1,
+    content: { type: "doc", content: Array.from({ length: 4000 }, () => ({
+      type: "paragraph", content: [{ type: "text", text: "가" }],
+    })) },
+  }), { publish: true });
+  const paragraphs = source.content.content;
+  const remaining = bytes - Buffer.byteLength(JSON.stringify(source, null, 2) + "\n");
+  const characters = Math.floor(remaining / 3);
+  const perParagraph = Math.floor(characters / paragraphs.length);
+  for (const [index, paragraph] of paragraphs.entries()) {
+    paragraph.content[0].text += "가".repeat(perParagraph + (index < characters % paragraphs.length ? 1 : 0));
+  }
+  paragraphs.at(-1).content[0].text += "a".repeat(remaining % 3);
+  const normalized = parseBlogDocument(source, { publish: true });
+  strict.equal(Buffer.byteLength(JSON.stringify(normalized, null, 2) + "\n"), bytes);
+  return normalized;
+}
+
+// 현재 발행 로더를 테스트 저장소의 파일과 실제 파서로 실행
+async function publishedPostLoader(appRoot) {
+  const source = await readFile(new URL("../app/shared/data/published-posts.ts", import.meta.url), "utf8");
+  const compiled = typescript.transpileModule(source, {
+    compilerOptions: { module: typescript.ModuleKind.CommonJS, target: typescript.ScriptTarget.ES2022 },
+  }).outputText;
+  const exports = {};
+  runInNewContext(compiled, {
+    Error,
+    JSON,
+    exports,
+    process: { cwd: () => appRoot },
+    require: (specifier) => {
+      if (specifier === "node:path") return { join };
+      if (specifier === "node:fs/promises") return { readdir, readFile, stat };
+      if (specifier === "../lib/content") return { MAX_POST_BYTES, parseBlogDocument, toArticlePost };
+      throw new Error("검증에서 허용하지 않은 발행 조회 의존성입니다: " + specifier);
+    },
+  }, { filename: "published-posts.ts" });
+  return exports;
+}
+
 // 전송 계층에서 원래 Host와 중복 헤더를 보존한 응답 코드 확인
 function requestStatus(url, headers) {
   return new Promise((resolve, reject) => {
@@ -96,6 +142,44 @@ test("저장소 경로를 생략하면 단독 앱 루트의 글만 발행하고 
   strict.equal(await git(root, "status", "--porcelain"), "");
   strict.equal(await git(root, "ls-files", ".editor"), "");
   strict.equal((await service.readDraft(result.draft.id)).id, result.draft.id);
+});
+
+test("발행 JSON이 2,000,001바이트이면 초안을 보존하고 공개 파일과 Git 및 푸시를 바꾸지 않는다", async (context) => {
+  let pushes = 0;
+  const { root, appRoot, service, remote } = await fixture(context, {
+    push: async () => { pushes += 1; },
+  });
+  const source = documentAtPublicationBytes(MAX_POST_BYTES + 1);
+  const before = await git(root, "rev-parse", "HEAD");
+  const remoteBefore = await git(remote, "rev-parse", "main");
+  strict.equal(MAX_POST_BYTES, 2_000_000);
+  strict(Buffer.byteLength(JSON.stringify(source, null, 2) + "\n") <= 2 * 1024 * 1024);
+  await strict.rejects(service.publish(source), { status: 413 });
+  const saved = await service.readDraft(source.id);
+  strict.deepEqual(saved, { ...source, updatedAt: saved.updatedAt });
+  await strict.rejects(readFile(join(appRoot, "content/posts", source.slug + ".json")), { code: "ENOENT" });
+  strict.equal(await git(root, "rev-parse", "HEAD"), before);
+  strict.equal(await git(remote, "rev-parse", "main"), remoteBefore);
+  strict.equal(await git(root, "status", "--porcelain"), "");
+  strict.equal(pushes, 0);
+});
+
+test("발행 JSON이 정확히 2,000,000바이트인 글은 정상 발행하고 실제 파서와 사이트 로더로 읽는다", async (context) => {
+  const { root, appRoot, service, remote } = await fixture(context);
+  const source = documentAtPublicationBytes(MAX_POST_BYTES);
+  const result = await service.publish(source);
+  const bytes = await readFile(join(appRoot, "content/posts", result.slug + ".json"));
+  strict.equal(bytes.length, 2_000_000);
+  const published = parseBlogDocument(JSON.parse(bytes.toString("utf8")), { publish: true });
+  strict.deepEqual(published.content, source.content);
+  strict.equal(result.pushed, true);
+  strict.equal(await git(root, "rev-parse", "HEAD"), result.commit);
+  strict.equal(await git(remote, "rev-parse", "main"), result.commit);
+  strict.deepEqual((await git(root, "diff", "HEAD~1", "HEAD", "--name-only")).split("\n"), ["content/posts/" + result.slug + ".json"]);
+  const loader = await publishedPostLoader(appRoot);
+  const post = await loader.getPostBySlug(result.slug);
+  strict.equal(post.slug, result.slug);
+  strict.deepEqual(post.document, source.content);
 });
 
 test("이미지를 재작성한 글만 커밋하며 다른 스테이징과 README를 보존하고 블로그 원격에 푸시한다", async (context) => {

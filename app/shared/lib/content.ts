@@ -1,8 +1,10 @@
 import type { Post } from "../types/post";
 import type { BlogDocument, ParseBlogDocumentOptions, RichDocument, RichMark, RichNode } from "../types/content";
 
-const MAX_SLUG_BYTES = 180;
-const SLUG_PATTERN = /^[\p{L}\p{N}]+(?:-[\p{L}\p{N}]+)*$/u;
+export const MAX_SLUG_BYTES = 180;
+export const MAX_SLUG_LENGTH = 96;
+export const MAX_POST_BYTES = 2_000_000;
+export const SLUG_PATTERN = /^[\p{L}\p{N}]+(?:-[\p{L}\p{N}]+)*$/u;
 const MARK_TYPES = new Set(["bold", "italic", "underline", "strike", "code", "link"]);
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const BLOCK_TYPES = new Set(["paragraph", "heading", "bulletList", "orderedList", "blockquote", "codeBlock", "horizontalRule", "image"]);
@@ -165,7 +167,7 @@ export function slugifyTitle(title: string): string {
   const encoder = new TextEncoder();
   let bytes = 0;
   let result = "";
-  for (const character of Array.from(slug).slice(0, 96)) {
+  for (const character of Array.from(slug).slice(0, MAX_SLUG_LENGTH)) {
     const length = encoder.encode(character).length;
     if (bytes + length > MAX_SLUG_BYTES) break;
     bytes += length;
@@ -234,7 +236,7 @@ export function parseBlogDocument(value: unknown, options: ParseBlogDocumentOpti
   const date = readString(value.date, "게시일", 10);
   const updatedAt = readString(value.updatedAt, "저장 시각", 40);
   const content = parseRichDocument(value.content, publish);
-  if (Array.from(slug).length > 96 || new TextEncoder().encode(slug).length > MAX_SLUG_BYTES) {
+  if (Array.from(slug).length > MAX_SLUG_LENGTH || new TextEncoder().encode(slug).length > MAX_SLUG_BYTES) {
     throw new Error("글 주소는 96자와 UTF-8 180바이트 이내로 입력해 주세요.");
   }
   if (slug && !SLUG_PATTERN.test(slug)) throw new Error("글 주소에는 문자, 숫자와 하이픈만 사용할 수 있습니다.");

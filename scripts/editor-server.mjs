@@ -8,12 +8,18 @@ import { basename, dirname, join, relative, resolve } from "node:path";
 import { randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import { copyFile, lstat, mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
 
-import { slugifyTitle, parseBlogDocument } from "../app/shared/lib/content.ts";
+import {
+  SLUG_PATTERN,
+  MAX_POST_BYTES,
+  MAX_SLUG_BYTES,
+  MAX_SLUG_LENGTH,
+  slugifyTitle,
+  parseBlogDocument,
+} from "../app/shared/lib/content.ts";
 
 const execFileAsync = promisify(execFile);
 const defaultAppRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const slugPattern = /^[\p{L}\p{N}]+(?:-[\p{L}\p{N}]+)*$/u;
 const mediaPattern = /^\/__editor\/api\/media\/([0-9a-f-]{36})$/i;
 const maximumImageBytes = 10 * 1024 * 1024;
 const maximumJsonBytes = 2 * 1024 * 1024;
@@ -134,7 +140,7 @@ export function createEditorService(options = {}) {
       index += 1;
       const suffix = "-" + index;
       let stem = base;
-      while (Array.from(stem + suffix).length > 96 || Buffer.byteLength(stem + suffix) > 180) {
+      while (Array.from(stem + suffix).length > MAX_SLUG_LENGTH || Buffer.byteLength(stem + suffix) > MAX_SLUG_BYTES) {
         stem = Array.from(stem).slice(0, -1).join("").replace(/-$/g, "");
       }
       slug = stem + suffix;
@@ -241,11 +247,9 @@ export function createEditorService(options = {}) {
 
   // 발행 시 기존 주소와 다른 글의 덮어쓰기 방지
   async function validatePublication(document) {
-    if (!slugPattern.test(document.slug) || reservedSlugs.has(document.slug)) throw editorError(409, "이미 사용 중이거나 올바르지 않은 글 주소입니다.", "SLUG_CONFLICT");
+    if (!SLUG_PATTERN.test(document.slug) || reservedSlugs.has(document.slug)) throw editorError(409, "이미 사용 중이거나 올바르지 않은 글 주소입니다.", "SLUG_CONFLICT");
     await ensureDirectory(appRoot, postsRoot);
-    const files = (await readdir(postsRoot)).filter((name) => name.endsWith(".json"));
-    for (const file of files) {
-      const previous = parseBlogDocument(JSON.parse(await readFile(join(postsRoot, file), "utf8")), { publish: true });
+    for (const previous of await readPublishedDocuments()) {
       if (previous.id === document.id && previous.slug !== document.slug) throw editorError(409, "발행한 글의 주소는 변경할 수 없습니다.", "SLUG_IMMUTABLE");
       if (previous.slug === document.slug && previous.id !== document.id) throw editorError(409, "다른 글이 사용 중인 주소입니다.", "SLUG_CONFLICT");
     }
@@ -277,7 +281,7 @@ export function createEditorService(options = {}) {
   async function publishRecord(value) {
     const draft = await saveDraftRecord(value);
     const { publication, media } = await preparePublication(draft);
-    if (Buffer.byteLength(JSON.stringify(publication, null, 2) + "\n") > maximumJsonBytes) throw editorError(413, "발행할 본문이 너무 깁니다. 글을 나누거나 일부 내용을 줄여 주세요.");
+    if (Buffer.byteLength(JSON.stringify(publication, null, 2) + "\n") > MAX_POST_BYTES) throw editorError(413, "발행할 본문이 너무 깁니다. 글을 나누거나 일부 내용을 줄여 주세요.");
     await validatePublication(publication);
     await validateGitState();
     const postPath = join(postsRoot, publication.slug + ".json");
