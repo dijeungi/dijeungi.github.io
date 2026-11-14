@@ -11,7 +11,7 @@ export const metadata: Metadata = {
   openGraph: { type: "website", title: siteName, description: siteDescription },
 };
 
-// 발행 글과 기존 글을 모은 메인 페이지
+// 발행 글과 공개 GitHub 정보를 조합한 메인 페이지
 export default async function BlogPage() {
   const [posts, github] = await Promise.all([getAllPosts(), getGitHubOverview()]);
   const previews = posts.map(({ slug, title, description, category, date, readingMinutes, heroImage }) => ({

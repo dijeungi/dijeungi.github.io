@@ -1,8 +1,9 @@
 import { request } from "node:https";
 
-import snapshot from "../_data/github-snapshot.json";
 import { parseGitHubProfile } from "./github-live";
 import { parseContributionCalendar, expandContributionSnapshot } from "./github-calendar";
+
+import snapshot from "../_data/github-snapshot.json";
 
 import type { GitHubOverview } from "../_types/github";
 
@@ -73,8 +74,8 @@ async function getCommitCounts(years: number[], now: Date): Promise<Map<number, 
 // 메인 상단에 사용할 공개 GitHub 프로필과 연간 활동 구성
 export async function getGitHubOverview(): Promise<GitHubOverview> {
   const now = new Date();
-  const firstYear = new Date(snapshot.createdAt).getUTCFullYear();
   const currentYear = now.getUTCFullYear();
+  const firstYear = new Date(snapshot.createdAt).getUTCFullYear();
   const years = Array.from({ length: currentYear - firstYear + 1 }, (_, index) => currentYear - index);
   const fallbackYears = new Map(snapshot.years.map((year) => [year.year, expandContributionSnapshot(year)]));
   const [profileResult, calendarResults, commitCounts] = await Promise.all([
@@ -96,6 +97,7 @@ export async function getGitHubOverview(): Promise<GitHubOverview> {
   if (!fresh) console.warn("GitHub 공개 정보 일부를 갱신하지 못해 마지막으로 확인한 데이터를 사용합니다.");
   return {
     profile: profileResult.profile,
+    profileUpdatedAt: profileResult.fresh ? now.toISOString() : snapshot.updatedAt,
     years: calendarResults.flatMap(({ data, fresh: calendarFresh }) => data ? [{
       ...data,
       totalCommits: commitCounts.get(data.year) ?? null,

@@ -25,8 +25,8 @@ export function useGitHubOverview(initial: GitHubOverview): GitHubOverview {
     let active = true;
     let pending = false;
     let lastAttempt = 0;
-    let controller: AbortController | null = null;
     let requestTimeout: number | undefined;
+    let controller: AbortController | null = null;
 
     // 보관한 응답을 재사용하고 필요한 공개 정보만 독립적으로 갱신
     async function refresh() {
@@ -98,10 +98,18 @@ export function useGitHubOverview(initial: GitHubOverview): GitHubOverview {
   }, [login, initial.years]);
 
   const current = updates?.login === login ? updates : null;
-  const profile = current?.profile && current.profileCheckedAt >= Date.parse(initial.updatedAt) ? current.profile : initial.profile;
+  const initialProfileUpdatedAt = initial.profileUpdatedAt ?? initial.updatedAt;
+  const useLiveProfile = current?.profile != null && current.profileCheckedAt >= Date.parse(initialProfileUpdatedAt);
+  const profile = useLiveProfile && current.profile ? current.profile : initial.profile;
   const years = current?.years?.map((year) => {
     const original = initial.years.find((entry) => entry.year === year.year);
     return original && Date.parse(original.updatedAt) > current.calendarCheckedAt ? original : year;
   }) ?? initial.years;
-  return { ...initial, profile, years, source: current?.profile || current?.years ? "public-api" : initial.source };
+  return {
+    ...initial,
+    profile,
+    years,
+    profileUpdatedAt: useLiveProfile ? new Date(current.profileCheckedAt).toISOString() : initialProfileUpdatedAt,
+    source: current?.profile || current?.years ? "public-api" : initial.source,
+  };
 }

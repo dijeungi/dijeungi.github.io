@@ -13,8 +13,8 @@ import frameStyles from "@/app/shared/styles/PageFrame.module.css";
 
 import type { GitHubOverviewProps } from "../_types/home";
 
-const numberFormatter = new Intl.NumberFormat("ko-KR");
 const weekdays = ["", "월", "", "수", "", "금", ""];
+const numberFormatter = new Intl.NumberFormat("ko-KR");
 const levelClasses = [styles.level0, styles.level1, styles.level2, styles.level3, styles.level4] as const;
 
 // GitHub 프로필과 연도별 실제 기여 활동 표시
@@ -75,8 +75,6 @@ export function GitHubOverview({ github }: GitHubOverviewProps) {
                     key={day?.date ?? "padding-" + index}
                     style={{ gridColumnStart: Math.floor(index / 7) + 2, gridRowStart: index % 7 + 2 }}
                     data-date={day?.date}
-                    data-count={isFuture ? 0 : day?.count}
-                    data-level={isFuture ? 0 : day?.level}
                   />
                 ))}
               </div>

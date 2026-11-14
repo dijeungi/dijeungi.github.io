@@ -23,6 +23,7 @@ export type GitHubCalendarYear = GitHubContributionYear & { updatedAt: string };
 
 export type GitHubOverview = {
   profile: GitHubProfile;
+  profileUpdatedAt?: string;
   years: GitHubCalendarYear[];
   updatedAt: string;
   source: "github" | "snapshot" | "public-api";

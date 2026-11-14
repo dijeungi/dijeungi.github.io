@@ -4,8 +4,8 @@ import { useState } from "react";
 
 import type { GitHubCalendarYear } from "../_types/github";
 
-const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const millisecondsPerDay = 86400000;
+const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 // 연도 선택과 일요일 시작의 실제 GitHub 활동 달력 구성
 export function useGitHubCalendar(years: GitHubCalendarYear[], updatedAt: string) {

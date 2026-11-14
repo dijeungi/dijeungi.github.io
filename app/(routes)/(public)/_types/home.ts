@@ -1,5 +1,4 @@
 import type { RefObject } from "react";
-
 import type { Post } from "@/app/shared/types/post";
 import type { GitHubOverview, GitHubTooltipData } from "./github";
 
