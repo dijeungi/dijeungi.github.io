@@ -41,9 +41,3 @@
 :global(:root[data-theme="dark"]) .moon {
   display: none;
 }
-
-@media (prefers-reduced-motion: reduce) {
-  .button {
-    transition: none;
-  }
-}

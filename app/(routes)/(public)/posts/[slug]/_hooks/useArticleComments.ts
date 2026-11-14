@@ -2,7 +2,7 @@
 
 import { useRef, useState, useEffect } from "react";
 
-import { getResolvedTheme, subscribeTheme } from "@/app/shared/hooks/useTheme";
+import { getResolvedTheme, subscribeTheme } from "@/app/shared/lib/theme-store";
 
 // 글별 GitHub 댓글 위젯 연결과 화면 해제 관리
 export function useArticleComments(slug: string) {

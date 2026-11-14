@@ -5,12 +5,14 @@ import { createRequire } from "node:module";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
-import { themeInitScript, themeStorageKey } from "../app/shared/theme.ts";
+import { themeInitScript, themeStorageKey, systemThemeQuery } from "../app/shared/theme.ts";
 
 const source = await readFile(new URL("../app/styles/theme.css", import.meta.url), "utf8");
 const stylesheet = parse(source);
 const { transpileModule, ModuleKind, ScriptTarget } = createRequire(import.meta.url)("typescript");
+const storeSource = await readFile(new URL("../app/shared/lib/theme-store.ts", import.meta.url), "utf8");
 const hookSource = await readFile(new URL("../app/shared/hooks/useTheme.ts", import.meta.url), "utf8");
+const storeModule = transpileModule(storeSource, { compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2022 } }).outputText;
 const hookModule = transpileModule(hookSource, { compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2022 } }).outputText;
 
 // 테마 속성으로 선택하는 다크 루트 규칙 확인
@@ -102,8 +104,9 @@ function themeFixture({ stored = null, systemDark = false, blockedWrites = false
     },
   };
   const exports = {};
+  const storeExports = {};
   const modules = {
-    "@/app/shared/theme": { themeStorageKey },
+    "@/app/shared/theme": { themeStorageKey, systemThemeQuery },
     react: { useSyncExternalStore: (_subscribe, getSnapshot, getServerSnapshot) => server ? getServerSnapshot() : getSnapshot() },
   };
   const scope = {
@@ -121,9 +124,11 @@ function themeFixture({ stored = null, systemDark = false, blockedWrites = false
     scope.window = scope;
     new Script(themeInitScript).runInNewContext(scope);
   }
+  new Script(storeModule, { filename: "theme-store.test.cjs" }).runInNewContext({ ...scope, exports: storeExports });
+  modules["@/app/shared/lib/theme-store"] = storeExports;
   new Script(hookModule, { filename: "useTheme.test.cjs" }).runInNewContext(scope);
   return {
-    api: exports,
+    api: { ...storeExports, ...exports },
     mediaListeners,
     storageListeners,
     get theme() { return scope.document.documentElement.dataset.theme; },

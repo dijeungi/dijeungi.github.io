@@ -1,6 +1,7 @@
 export type Theme = "light" | "dark";
 
 export const themeStorageKey = "junho-tech-blog-theme";
+export const systemThemeQuery = "(prefers-color-scheme: dark)";
 
 export const themeInitScript = `(() => {
   let preference = null;
@@ -10,5 +11,5 @@ export const themeInitScript = `(() => {
   document.documentElement.dataset.theme =
     preference === "light" || preference === "dark"
       ? preference
-      : matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+      : matchMedia("${systemThemeQuery}").matches ? "dark" : "light";
 })();`;

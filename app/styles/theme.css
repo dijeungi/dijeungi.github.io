@@ -4,11 +4,11 @@
 
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --background: #101216;
-  --foreground: #e8edf4;
-  --muted: #bbc5d3;
-  --blue: #8ab4ff;
-  --line: #354050;
+  --background: var(--theme-background);
+  --foreground: var(--theme-text);
+  --muted: var(--theme-text-secondary);
+  --blue: var(--theme-accent);
+  --line: var(--theme-border);
   --theme-background: #101216;
   --theme-surface: #171b22;
   --theme-surface-hover: #242c38;
