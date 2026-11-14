@@ -5,6 +5,7 @@ import Image from "next/image";
 
 import { GitHubOverview } from "./GitHubOverview";
 import { useHomePosts } from "../_hooks/useHomePosts";
+import { WriterIcon } from "../write/_components/WriterIcon";
 import { formatPostDate } from "@/app/shared/lib/date";
 import { siteName } from "@/app/shared/constants/site";
 import { SiteBrand } from "@/app/shared/components/SiteBrand";
@@ -35,10 +36,6 @@ export function HomePage({ posts, github }: HomePageProps) {
       <header className={styles.header}>
         <div className={styles.headerInner + " " + frameStyles.content}>
           <SiteBrand />
-          <nav className={styles.headerNav} aria-label="메인 메뉴">
-            <Link className={styles.headerLink} href="/" aria-current="page">글</Link>
-            {showEditor && <Link className={styles.headerLink} href="/write/">글쓰기</Link>}
-          </nav>
         </div>
       </header>
 
@@ -150,6 +147,11 @@ export function HomePage({ posts, github }: HomePageProps) {
         )}
       </div>
       <footer className={styles.footer + " " + frameStyles.content}>© {new Date().getUTCFullYear()} {siteName}</footer>
+      {showEditor && (
+        <Link className={styles.writeButton} href="/write/" aria-label="글쓰기">
+          <WriterIcon className={styles.writeButtonIcon} name="plus" width={24} height={24} />
+        </Link>
+      )}
     </div>
   );
 }
