@@ -75,28 +75,9 @@
 .currentTitle {
   grid-area: 1 / 1;
 }
-.brand {
-  display: inline-flex;
-  align-items: center;
-  flex-shrink: 0;
-  color: var(--foreground);
-  font-size: 16px;
-  font-weight: 400;
-  line-height: 28px;
-  letter-spacing: 0;
-}
-.brand:hover {
-  text-decoration: none;
-}
-.brand:focus-visible,
 .currentTitle:focus-visible {
   outline: 2px solid var(--blue);
   outline-offset: -2px;
-}
-.brandName {
-  white-space: nowrap;
-  font-size: 20px;
-  font-weight: 500;
 }
 .currentTitle {
   display: none;

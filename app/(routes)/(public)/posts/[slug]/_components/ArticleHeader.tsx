@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 import { ShareIcon } from "./ShareIcon";
-import { siteName } from "@/app/shared/constants/site";
+import { SiteBrand } from "@/app/shared/components/SiteBrand";
 
 import styles from "../PostDetail.module.css";
 import frameStyles from "@/app/shared/styles/PageFrame.module.css";
@@ -27,9 +27,7 @@ export function ArticleHeader({
     >
       <div className={styles.headerInner + " " + frameStyles.content + (showEditor ? " " + styles.withEditor : "")}>
         <div className={styles.headerTitles}>
-          <Link className={styles.brand} href="/">
-            <span className={styles.brandName}>{siteName}</span>
-          </Link>
+          <SiteBrand className={styles.brand} />
           <button
             className={styles.currentTitle}
             type="button"

@@ -7,6 +7,7 @@ import { GitHubOverview } from "./GitHubOverview";
 import { useHomePosts } from "../_hooks/useHomePosts";
 import { formatPostDate } from "@/app/shared/lib/date";
 import { siteName } from "@/app/shared/constants/site";
+import { SiteBrand } from "@/app/shared/components/SiteBrand";
 
 import styles from "../Home.module.css";
 import frameStyles from "@/app/shared/styles/PageFrame.module.css";
@@ -33,7 +34,7 @@ export function HomePage({ posts, github }: HomePageProps) {
       <a className={styles.skipLink} href="#posts">글 목록으로 바로가기</a>
       <header className={styles.header}>
         <div className={styles.headerInner + " " + frameStyles.content}>
-          <Link className={styles.brand} href="/">{siteName}</Link>
+          <SiteBrand />
           <nav className={styles.headerNav} aria-label="메인 메뉴">
             <Link className={styles.headerLink} href="/" aria-current="page">글</Link>
             {showEditor && <Link className={styles.headerLink} href="/write/">글쓰기</Link>}

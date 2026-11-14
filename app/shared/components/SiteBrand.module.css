@@ -1,0 +1,29 @@
+.brand {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  color: #252d3a;
+  font-size: 20px;
+  font-weight: 500;
+  line-height: 28px;
+  letter-spacing: -0.03em;
+  white-space: nowrap;
+}
+.brand:hover {
+  text-decoration: none;
+}
+.brand:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: -2px;
+}
+.label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (max-width: 600px) {
+  .brand {
+    font-size: 18px;
+  }
+}
