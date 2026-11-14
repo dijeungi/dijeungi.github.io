@@ -15,8 +15,8 @@ html {
   outline-offset: 4px;
 }
 ::selection {
-  color: #164e9c;
-  background: #dceaff;
+  color: var(--theme-selection-text, #164e9c);
+  background: var(--theme-selection-background, #dceaff);
 }
 
 @media (prefers-reduced-motion: reduce) {

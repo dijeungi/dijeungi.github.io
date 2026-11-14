@@ -1,0 +1,52 @@
+:root {
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --background: #101216;
+  --foreground: #e8edf4;
+  --muted: #bbc5d3;
+  --blue: #8ab4ff;
+  --line: #354050;
+  --theme-background: #101216;
+  --theme-surface: #171b22;
+  --theme-surface-hover: #242c38;
+  --theme-surface-soft: #1d2633;
+  --theme-text: #e8edf4;
+  --theme-text-secondary: #bbc5d3;
+  --theme-text-muted: #9aa8bc;
+  --theme-border: #354050;
+  --theme-border-subtle: #293241;
+  --theme-border-strong: #53647b;
+  --theme-accent: #8ab4ff;
+  --theme-accent-hover: #adccff;
+  --theme-accent-soft: #192f4d;
+  --theme-accent-text: #a8ccff;
+  --theme-on-accent: #111c2e;
+  --theme-code-surface: #111923;
+  --theme-code-text: #d5e0ef;
+  --theme-code-toolbar: #202c3a;
+  --theme-success-bg: #142d25;
+  --theme-success-border: #315b49;
+  --theme-success-text: #a8d9bf;
+  --theme-error-bg: #351e26;
+  --theme-error-border: #6c3b49;
+  --theme-error-text: #f2afbb;
+  --theme-notice-bg: #172b43;
+  --theme-notice-border: #36587c;
+  --theme-notice-text: #abcbed;
+  --theme-shadow-color: rgb(0 0 0 / 25%);
+  --theme-overlay: rgb(23 27 34 / 97%);
+  --theme-tooltip-bg: #303b4b;
+  --theme-tooltip-text: #f2f5f9;
+  --theme-tooltip-muted: #c0ccdb;
+  --theme-calendar-empty: #242d3b;
+  --theme-calendar-level-1: #0e4429;
+  --theme-calendar-level-2: #006d32;
+  --theme-calendar-level-3: #26a641;
+  --theme-calendar-level-4: #39d353;
+  --theme-skeleton-line: #354a66;
+  --theme-selection-background: #244c78;
+  --theme-selection-text: #f5f9ff;
+}

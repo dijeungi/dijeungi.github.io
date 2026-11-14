@@ -9,17 +9,17 @@
   width: 56px;
   height: 56px;
   border-radius: 50%;
-  background: #3182f6;
-  color: #fff;
-  box-shadow: 0 4px 16px rgb(49 130 246 / 24%);
+  background: var(--theme-accent, #3182f6);
+  color: var(--theme-on-accent, #fff);
+  box-shadow: 0 4px 16px var(--theme-shadow-color, rgb(49 130 246 / 24%));
   transition: background-color 160ms ease;
 }
 .button:hover {
-  background: #216bce;
+  background: var(--theme-accent-hover, #216bce);
   text-decoration: none;
 }
 .button:focus-visible {
-  outline: 2px solid #3182f6;
+  outline: 2px solid var(--theme-accent, #3182f6);
   outline-offset: 4px;
 }
 .icon {

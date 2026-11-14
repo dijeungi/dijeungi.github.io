@@ -2,6 +2,8 @@
 
 import { useRef, useState, useEffect } from "react";
 
+import { getResolvedTheme, subscribeTheme } from "@/app/shared/hooks/useTheme";
+
 // 글별 GitHub 댓글 위젯 연결과 화면 해제 관리
 export function useArticleComments(slug: string) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -27,7 +29,7 @@ export function useArticleComments(slug: string) {
       reactionsenabled: "0",
       emitmetadata: "0",
       inputposition: "top",
-      theme: "light",
+      theme: getResolvedTheme(),
       lang: "ko",
       loading: "lazy",
     };
@@ -37,6 +39,9 @@ export function useArticleComments(slug: string) {
     }
 
     container.appendChild(widget);
+    const unsubscribeTheme = subscribeTheme(() => {
+      widget.setAttribute("theme", getResolvedTheme());
+    });
 
     let loader = document.getElementById("giscus-component-loader");
 
@@ -60,6 +65,7 @@ export function useArticleComments(slug: string) {
     }
 
     return () => {
+      unsubscribeTheme();
       loader?.removeEventListener("error", handleLoadError);
       widget.remove();
     };

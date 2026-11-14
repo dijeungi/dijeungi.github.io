@@ -8,6 +8,7 @@ import { useHomePosts } from "../_hooks/useHomePosts";
 import { WriteButton } from "../write/_components/WriteButton";
 import { formatPostDate } from "@/app/shared/lib/date";
 import { SiteBrand } from "@/app/shared/components/SiteBrand";
+import { ThemeToggle } from "@/app/shared/components/ThemeToggle";
 import { siteName, linkedInProfileUrl } from "@/app/shared/constants/site";
 
 import styles from "../Home.module.css";
@@ -35,28 +36,32 @@ export function HomePage({ posts, github }: HomePageProps) {
       <header className={styles.header}>
         <div className={styles.headerInner + " " + frameStyles.content}>
           <SiteBrand />
-          <nav className={styles.socialLinks} aria-label="개발자 프로필">
-            <a
-              className={styles.socialLink}
-              href={github.profile.profileUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label="GitHub 프로필, 새 탭에서 열기"
-            >
-              GitHub
-              <span className={styles.externalLinkIcon} aria-hidden="true">↗</span>
-            </a>
-            <a
-              className={styles.socialLink}
-              href={linkedInProfileUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label="LinkedIn 프로필, 새 탭에서 열기"
-            >
-              LinkedIn
-              <span className={styles.externalLinkIcon} aria-hidden="true">↗</span>
-            </a>
-          </nav>
+          <div className={styles.headerActions}>
+            <nav className={styles.socialLinks} aria-label="개발자 프로필">
+              <a
+                className={styles.socialLink}
+                href={github.profile.profileUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="GitHub 프로필, 새 탭에서 열기"
+              >
+                GitHub
+                <span className={styles.externalLinkIcon} aria-hidden="true">↗</span>
+              </a>
+              <a
+                className={styles.socialLink}
+                href={linkedInProfileUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="LinkedIn 프로필, 새 탭에서 열기"
+              >
+                LinkedIn
+                <span className={styles.externalLinkIcon} aria-hidden="true">↗</span>
+              </a>
+            </nav>
+            <span className={styles.headerSeparator} aria-hidden="true" />
+            <ThemeToggle />
+          </div>
         </div>
       </header>
 

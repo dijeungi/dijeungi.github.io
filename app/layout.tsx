@@ -1,7 +1,10 @@
+import { themeInitScript } from "@/app/shared/theme";
 import { siteName, siteDescription } from "@/app/shared/constants/site";
+import { ThemeController } from "@/app/shared/components/ThemeController";
 
 import "./styles/reset.css";
 import "./styles/layout.css";
+import "./styles/theme.css";
 import "./styles/typography.css";
 
 import type { Metadata } from "next";
@@ -22,8 +25,14 @@ export const metadata: Metadata = {
 // 글 상세 공통 문서 구성
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="ko">
-      <body>{children}</body>
+    <html lang="ko" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
+      </head>
+      <body>
+        <ThemeController />
+        {children}
+      </body>
     </html>
   );
 }
