@@ -6,11 +6,32 @@
   margin-inline: auto;
 }
 
-.eyebrow { color: var(--blue); font-family: var(--font-mono); font-size: 11px; letter-spacing: 1.6px; }
-.title { margin-top: 30px; font-size: 36px; font-weight: 400; line-height: 44px; letter-spacing: -0.25px; }
-.description { margin-top: 24px; color: var(--muted); line-height: 24px; }
-.link { display: inline-block; margin-top: 24px; font-size: 14px; }
+.eyebrow {
+  color: var(--blue);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 1.6px;
+}
+.title {
+  margin-top: 30px;
+  font-size: 36px;
+  font-weight: 400;
+  line-height: 44px;
+  letter-spacing: -0.25px;
+}
+.description {
+  margin-top: 24px;
+  color: var(--muted);
+  line-height: 24px;
+}
+.link {
+  display: inline-block;
+  margin-top: 24px;
+  font-size: 14px;
+}
 
 @media (max-width: 480px) {
-  .page { padding-top: 72px; }
+  .page {
+    padding-top: 72px;
+  }
 }

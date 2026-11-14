@@ -11,8 +11,12 @@
 }
 
 @media (min-width: 481px) {
-  .frame { --page-gutter: 48px; }
+  .frame {
+    --page-gutter: 48px;
+  }
 }
 @media (min-width: 1025px) {
-  .frame { --page-gutter: 72px; }
+  .frame {
+    --page-gutter: 72px;
+  }
 }
