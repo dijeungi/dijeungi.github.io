@@ -22,7 +22,7 @@ export const metadata: Metadata = {
   },
 };
 
-// 글 상세 공통 문서 구성
+// 블로그 공통 문서와 테마 초기화 구성
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="ko" suppressHydrationWarning>

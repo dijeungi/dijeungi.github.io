@@ -171,7 +171,6 @@
   margin-top: 0;
 }
 .heading {
-  --article-heading-gap: 24px;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -251,35 +250,6 @@
   grid-column: var(--body-column);
   min-width: 0;
   padding-bottom: 96px;
-}
-.section {
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-  padding-block: 24px;
-}
-.section h2 {
-  margin: 0;
-  font-size: 24px;
-  font-weight: 400;
-  line-height: 32px;
-  letter-spacing: 0;
-}
-.section > p {
-  margin: 0;
-  font-size: 16px;
-  font-weight: 400;
-  line-height: 24px;
-  letter-spacing: 0;
-}
-.note {
-  padding: 3px 0 3px 24px;
-  border-left: 2px solid var(--blue);
-}
-.note p {
-  color: var(--theme-text-secondary, #4d6384);
-  font-size: 14px;
-  line-height: 24px;
 }
 .codeBlock {
   overflow: hidden;
@@ -433,10 +403,6 @@
   }
 }
 @media (min-width: 600px) {
-  .section h2 {
-    font-size: 32px;
-    line-height: 40px;
-  }
   .richContent h2 {
     font-size: 32px;
     line-height: 40px;
@@ -447,11 +413,6 @@
   }
 }
 @media (min-width: 1024px) {
-  .section h2 {
-    font-size: 44px;
-    line-height: 52px;
-    letter-spacing: -0.5px;
-  }
   .richContent h2 {
     font-size: 44px;
     line-height: 52px;
@@ -509,9 +470,6 @@
   .heading h1 {
     font-size: 48px;
     line-height: 64px;
-  }
-  .section > p {
-    line-height: 26px;
   }
   .richContent p:not(.copyFeedback) {
     line-height: 26px;

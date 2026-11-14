@@ -287,7 +287,6 @@ export function toArticlePost(document: BlogDocument): Post {
     date: normalized.date || normalized.updatedAt.slice(0, 10),
     readingMinutes: normalized.readingMinutes || estimateReadingMinutes(normalized.content),
     heroImage: normalized.heroImage,
-    sections: [],
     document: normalized.content,
   };
 }

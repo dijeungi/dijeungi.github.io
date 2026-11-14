@@ -9,7 +9,7 @@ import type { ArticleReaderProps } from "../_types/reader";
 
 // 카테고리와 제목 및 대표 이미지 표시
 export function ArticleHero({ post }: ArticleReaderProps) {
-  const firstContentImage = post.document ? getFirstContentImage(post.document) : undefined;
+  const firstContentImage = getFirstContentImage(post.document);
   const heroImage = post.heroImage?.src === firstContentImage?.src ? undefined : post.heroImage;
 
   return (

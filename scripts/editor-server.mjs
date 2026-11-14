@@ -30,10 +30,10 @@ function editorError(status, message, code, commit) {
   return Object.assign(new Error(message), { status, code, commit });
 }
 
-// 파일이 없는 경우에만 기본값 반환
-async function readOptional(path, fallback = null) {
+// 파일이 없는 경우에만 null 반환
+async function readOptional(path) {
   try { return await readFile(path); } catch (error) {
-    if (error.code === "ENOENT") return fallback;
+    if (error.code === "ENOENT") return null;
     throw error;
   }
 }

@@ -37,6 +37,7 @@ export function useArticleReader() {
   useEffect(() => {
     let frameId: number | null = null;
     const content = contentRef.current;
+    const codeTimers = codeTimersRef.current;
     mountedRef.current = true;
 
     if (!content) {
@@ -112,7 +113,7 @@ export function useArticleReader() {
         window.clearTimeout(shareTimerRef.current);
       }
 
-      Object.values(codeTimersRef.current).forEach((timerId) =>
+      Object.values(codeTimers).forEach((timerId) =>
         window.clearTimeout(timerId),
       );
     };

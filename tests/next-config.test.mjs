@@ -14,12 +14,12 @@ const compiled = typescript.transpileModule(source, {
 
 // 실제 설정을 발행 파일 목록과 환경만 가짜로 주입한 VM에서 평가
 function evaluateConfig(phase, entries = [], failure = null) {
-  const module = { exports: {} };
+  const loaded = { exports: {} };
   const reads = [];
   runInNewContext(compiled, {
-    module,
+    module: loaded,
     Error,
-    exports: module.exports,
+    exports: loaded.exports,
     process: { cwd: () => "/virtual-blog", env: {} },
     require: (specifier) => {
       if (specifier === "node:path") return { join };
@@ -34,7 +34,7 @@ function evaluateConfig(phase, entries = [], failure = null) {
       throw new Error("검증에서 허용하지 않은 설정 의존성입니다: " + specifier);
     },
   }, { filename: "next.config.ts" });
-  const config = module.exports.default(phase);
+  const config = loaded.exports.default(phase);
   return { config, reads };
 }
 
