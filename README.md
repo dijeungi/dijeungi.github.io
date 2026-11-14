@@ -50,12 +50,15 @@ npm run dev
 
 ## GitHub 프로필과 활동
 
-공개 프로필과 가입 연도부터 현재 연도까지의 활동을 빌드 시 GitHub에서 가져옵니다. 정적 사이트이므로 프로필 변경과 새 활동은 다음 빌드 및 배포에 반영됩니다. GitHub 조회가 실패하면 `app/(routes)/(public)/_data/github-snapshot.json`에 보관한 공개 데이터를 사용합니다. 활동 달력에는 해당 연도 데이터의 확인 날짜를 표시하며, 아직 확인할 수 없는 미래 날짜를 비워 둡니다.
+공개 프로필과 가입 연도부터 현재 연도까지의 활동을 빌드 시 GitHub에서 가져와 첫 화면에 표시합니다. 페이지에 접속하면 브라우저에서 공개 정보를 다시 조회하며, 화면을 열어 둔 동안에는 5분 간격으로 변경을 확인합니다. 숨긴 탭에서는 조회를 멈추고 화면 복귀와 네트워크 재연결 때 조회 주기를 확인합니다. 같은 브라우저에서 목록과 상세를 오갈 때는 최근 5분 응답을 재사용합니다.
+
+프로필은 GitHub 공개 API, 잔디는 [GitHub Contributions API](https://github.com/grubersjoe/github-contributions-api)에서 가져옵니다. 별도 배포나 방문자의 GitHub 로그인이 필요하지 않습니다. 기여 API는 GitHub 공식 서비스가 아니며 결과를 1시간 캐시합니다. GitHub 자체 기여 집계에도 지연이 있어 변경 직후 반영을 보장하지 않습니다. API 조회가 실패하면 표시 중인 정상 데이터를 유지합니다. 첫 빌드의 GitHub 조회도 실패하면 `app/(routes)/(public)/_data/github-snapshot.json`에 보관한 공개 데이터를 사용합니다.
 
 - 잔디의 합계와 일별 숫자는 GitHub 공개 캘린더의 실제 기여 수입니다. 커밋 외에 PR 등도 포함하므로 `기여`로 표시합니다.
-- 빌드 환경에 `GITHUB_TOKEN`이 있으면 GraphQL API로 연간 커밋 수를 별도 조회합니다. 권한이 없거나 조회가 실패하면 커밋 수는 표시하지 않습니다. 로컬에서는 토큰 없이 프로필과 잔디를 사용할 수 있습니다.
+- 빌드 환경에 `GITHUB_TOKEN`이 있으면 GraphQL API로 초기 연간 커밋 수를 별도 조회합니다. 자동 갱신 API는 커밋 합계를 제공하지 않으므로 해당 연도 갱신 후에는 전체 기여 수만 표시합니다. 이전 커밋 수를 새 데이터와 섞지 않습니다.
 - 배포 워크플로는 GitHub Actions의 기본 토큰을 빌드 단계에만 전달합니다. 토큰은 브라우저 데이터와 정적 결과물에 포함하지 않습니다.
-- 방문자의 브라우저에서 GitHub API를 호출하지 않습니다. 연도를 바꿀 때는 빌드에 포함한 공개 데이터를 사용합니다.
+- 브라우저 요청에는 토큰이나 로그인 정보를 포함하지 않습니다. 프로필과 잔디는 각각 검증하고 반영하므로 한쪽 조회가 실패해도 성공한 쪽은 갱신됩니다. 연도 선택은 갱신 뒤에도 유지됩니다.
+- 프로필 수정 시각으로 사진 URL 버전을 바꿔 사진도 다시 불러옵니다. 달력 하단 날짜는 원본 집계 시각이 아닌 조회 날짜이며, 미래 날짜는 비워 둡니다.
 
 ## 댓글
 
@@ -85,6 +88,8 @@ npm run build
 - `app/(routes)/(public)/_hooks/useHomePosts.ts`: 카테고리 집계, 목록 선택과 페이지 이동
 - `app/(routes)/(public)/_components/GitHubOverview.tsx`: 상단 GitHub 프로필과 연간 활동 달력
 - `app/(routes)/(public)/_hooks/useGitHubCalendar.ts`: 활동 연도 선택과 주별 달력 배치
+- `app/(routes)/(public)/_hooks/useGitHubOverview.ts`: 공개 정보 자동 조회, 화면 복귀, 캐시와 요청 해제
+- `app/(routes)/(public)/_lib/github-live.ts`: 브라우저 공개 응답과 프로필 사진 버전 검증
 - `app/(routes)/(public)/_lib/github.server.ts`: 빌드 전용 공개 프로필과 활동 조회
 - `app/(routes)/(public)/_lib/github-calendar.ts`: 실제 일별 기여 수 파싱과 보관 데이터 검증
 - `app/(routes)/(public)/_data/github-snapshot.json`: 조회 실패에 대비한 공개 데이터

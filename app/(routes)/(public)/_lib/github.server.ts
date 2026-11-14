@@ -1,9 +1,10 @@
 import { request } from "node:https";
 
 import snapshot from "../_data/github-snapshot.json";
+import { parseGitHubProfile } from "./github-live";
 import { parseContributionCalendar, expandContributionSnapshot } from "./github-calendar";
 
-import type { GitHubProfile, GitHubOverview } from "../_types/github";
+import type { GitHubOverview } from "../_types/github";
 
 const login = "dijeungi";
 
@@ -44,18 +45,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
-// 공개 프로필의 필요한 필드만 변환
-function parseProfile(value: unknown): GitHubProfile {
-  if (!isRecord(value) || value.login !== login || typeof value.avatar_url !== "string" || value.html_url !== "https://github.com/" + login || (value.name !== null && typeof value.name !== "string") || (value.bio !== null && typeof value.bio !== "string")) {
-    throw new Error("GitHub 공개 프로필을 읽지 못했습니다.");
-  }
-  const avatar = new URL(value.avatar_url);
-  if (avatar.protocol !== "https:" || avatar.hostname !== "avatars.githubusercontent.com") {
-    throw new Error("GitHub 프로필 사진 주소가 올바르지 않습니다.");
-  }
-  return { login, name: value.name, bio: value.bio, avatarUrl: avatar.href, profileUrl: value.html_url };
-}
-
 // CI에서 허용되는 경우 연간 실제 커밋 수 조회
 async function getCommitCounts(years: number[], now: Date): Promise<Map<number, number>> {
   const token = process.env.GITHUB_TOKEN;
@@ -89,7 +78,7 @@ export async function getGitHubOverview(): Promise<GitHubOverview> {
   const years = Array.from({ length: currentYear - firstYear + 1 }, (_, index) => currentYear - index);
   const fallbackYears = new Map(snapshot.years.map((year) => [year.year, expandContributionSnapshot(year)]));
   const [profileResult, calendarResults, commitCounts] = await Promise.all([
-    readGitHub("https://api.github.com/users/" + login).then((text) => parseProfile(JSON.parse(text))).then(
+    readGitHub("https://api.github.com/users/" + login).then((text) => parseGitHubProfile(JSON.parse(text), login)).then(
       (profile) => ({ profile, fresh: true }),
       () => ({ profile: snapshot.profile, fresh: false }),
     ),

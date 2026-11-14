@@ -25,7 +25,16 @@ export type GitHubOverview = {
   profile: GitHubProfile;
   years: GitHubCalendarYear[];
   updatedAt: string;
-  source: "github" | "snapshot";
+  source: "github" | "snapshot" | "public-api";
+};
+
+export type GitHubLiveUpdates = {
+  login: string;
+  profile: GitHubProfile | null;
+  years: GitHubCalendarYear[] | null;
+  profileCheckedAt: number;
+  calendarCheckedAt: number;
+  checkedAt: number;
 };
 
 export type GitHubSnapshotYear = {

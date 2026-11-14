@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 
+import { useGitHubOverview } from "../_hooks/useGitHubOverview";
 import { useGitHubCalendar } from "../_hooks/useGitHubCalendar";
 
 import styles from "../GitHubOverview.module.css";
@@ -15,9 +16,10 @@ const levelClasses = [styles.level0, styles.level1, styles.level2, styles.level3
 
 // GitHub 프로필과 연도별 실제 기여 활동 표시
 export function GitHubOverview({ github }: GitHubOverviewProps) {
-  const { profile, updatedAt } = github;
+  const overview = useGitHubOverview(github);
+  const { profile, updatedAt } = overview;
   const displayName = profile.name || profile.login;
-  const { cells, months, asOfDate, weekCount, selectedYear, availableYears, selectYear } = useGitHubCalendar(github.years, updatedAt);
+  const { cells, months, asOfDate, weekCount, selectedYear, availableYears, selectYear } = useGitHubCalendar(overview.years, updatedAt);
   const hasCalendar = selectedYear !== null && selectedYear.days.length > 0;
   const gridColumns = "repeat(" + weekCount + ", minmax(0, 1fr))";
 
@@ -54,7 +56,7 @@ export function GitHubOverview({ github }: GitHubOverviewProps) {
             <div
               className={styles.calendarViewport}
               role="img"
-              aria-label={selectedYear.year + "년 GitHub 기여 달력. 총 " + numberFormatter.format(selectedYear.totalContributions) + "회 기여. " + asOfDate + " 기준이며 진한 초록색일수록 기여가 많습니다."}
+              aria-label={selectedYear.year + "년 GitHub 기여 달력. 총 " + numberFormatter.format(selectedYear.totalContributions) + "회 기여. " + asOfDate + " 조회 결과이며 진한 초록색일수록 기여가 많습니다."}
               tabIndex={0}
             >
               <div className={styles.calendarCanvas} aria-hidden="true">
@@ -79,7 +81,7 @@ export function GitHubOverview({ github }: GitHubOverviewProps) {
               </div>
             </div>
             <div className={styles.calendarFooter}>
-              <p className={styles.updated}>{asOfDate.replaceAll("-", ".")} 기준</p>
+              <p className={styles.updated}>{asOfDate.replaceAll("-", ".")} 조회</p>
               <div className={styles.legend} aria-label="기여 횟수는 옅은 색에서 진한 색까지 다섯 단계로 표시됩니다.">
                 <span>적음</span>
                 {levelClasses.map((level, index) => <span className={styles.legendCell + " " + level} key={index} aria-hidden="true" />)}
