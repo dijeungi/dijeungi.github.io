@@ -83,9 +83,9 @@
 .yearTrigger {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: center;
   gap: 6px;
-  padding: 8px 8px 8px 12px;
+  padding: 8px 12px;
   border: 1px solid #e5e9ef;
   border-radius: 7px;
   background: #fff;
@@ -140,7 +140,9 @@
   box-shadow: 0 6px 20px #252d3a14;
 }
 .yearOption {
-  display: block;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   width: 100%;
   padding: 8px;
   border: 0;
@@ -149,7 +151,7 @@
   color: #4e5968;
   font: inherit;
   font-size: 13px;
-  text-align: left;
+  text-align: center;
   white-space: nowrap;
   cursor: pointer;
 }
