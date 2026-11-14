@@ -9,7 +9,7 @@ import type { ArticleReaderProps } from "../_types/reader";
 // 카테고리와 제목 및 대표 이미지 표시
 export function ArticleHero({ post }: ArticleReaderProps) {
   return (
-    <section className={styles.hero} aria-labelledby="article-title">
+    <section className={styles.hero + (post.heroImage ? " " + styles.heroWithMedia : "")} aria-labelledby="article-title">
       <div className={styles.pageGrid + " " + styles.heroGrid}>
         <header className={styles.heading}>
           <p className={styles.category}>{post.category}</p>
