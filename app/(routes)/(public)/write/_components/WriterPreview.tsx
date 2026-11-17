@@ -6,6 +6,7 @@ import { getFirstContentImage, estimateReadingMinutes } from "@/app/shared/lib/c
 import { ArticleRichContent } from "../../posts/[slug]/_components/ArticleRichContent";
 
 import styles from "../Write.module.css";
+import mediaStyles from "@/app/shared/styles/ArticleMedia.module.css";
 
 import type { WriterPreviewProps } from "../_types/writer";
 
@@ -31,7 +32,7 @@ export function WriterPreview({ draft }: WriterPreviewProps) {
             </p>
           )}
         </header>
-        {heroImage && <Image className={styles.previewHero} src={heroImage.src} alt={heroImage.alt} width={heroImage.width ?? 1600} height={heroImage.height ?? 900} unoptimized />}
+        {heroImage && <Image className={styles.previewHero + " " + mediaStyles.image} src={heroImage.src} alt={heroImage.alt} width={heroImage.width ?? 1600} height={heroImage.height ?? 900} unoptimized />}
         {draft && <div className={styles.previewBody}><ArticleRichContent document={draft.content} copyCode={copyCode} codeStatuses={codeStatuses} /></div>}
       </article>
     </section>

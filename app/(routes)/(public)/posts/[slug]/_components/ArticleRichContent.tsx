@@ -4,6 +4,7 @@ import { Fragment } from "react";
 import { isSafeContentUrl } from "@/app/shared/lib/content";
 
 import styles from "../PostDetail.module.css";
+import mediaStyles from "@/app/shared/styles/ArticleMedia.module.css";
 
 import type { ReactNode } from "react";
 import type { RichNode } from "@/app/shared/types/content";
@@ -52,11 +53,11 @@ export function ArticleRichContent({ document, copyCode, codeStatuses }: Article
       const width = node.attrs?.width;
       const height = node.attrs?.height;
       return (
-        <figure key={path}>
+        <figure key={path} className={mediaStyles.frame}>
           {width && height ? (
-            <Image className={styles.richImage} src={src} alt={alt} width={width} height={height} loading="lazy" unoptimized />
+            <Image className={styles.richImage + " " + mediaStyles.image} src={src} alt={alt} width={width} height={height} loading="lazy" unoptimized />
           ) : (
-            <img className={styles.richImage} src={src} alt={alt} loading="lazy" decoding="async" />
+            <img className={styles.richImage + " " + mediaStyles.image} src={src} alt={alt} loading="lazy" decoding="async" />
           )}
           {node.attrs?.title && <figcaption>{node.attrs.title}</figcaption>}
         </figure>

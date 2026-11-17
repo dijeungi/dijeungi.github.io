@@ -5,6 +5,7 @@ import { formatPostDate } from "@/app/shared/lib/date";
 import { getFirstContentImage } from "@/app/shared/lib/content";
 
 import styles from "../PostDetail.module.css";
+import mediaStyles from "@/app/shared/styles/ArticleMedia.module.css";
 
 import type { ArticleReaderProps } from "../_types/reader";
 
@@ -33,9 +34,9 @@ export function ArticleHero({ post }: ArticleReaderProps) {
         </header>
       </div>
       {heroImage && (
-        <div className={styles.heroMedia}>
+        <div className={styles.heroMedia + " " + mediaStyles.frame}>
           <Image
-            className={styles.heroImage}
+            className={mediaStyles.image}
             src={heroImage.src}
             alt={heroImage.alt}
             width={heroImage.width ?? 1600}
