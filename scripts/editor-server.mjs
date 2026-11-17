@@ -11,6 +11,7 @@ import { basename, dirname, join, relative, resolve } from "node:path";
 import { randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import { copyFile, lstat, mkdir, open, readFile, readdir, rename, rm, unlink, writeFile } from "node:fs/promises";
 
+import { readCleanupFile, removeCleanupFile, restoreCleanupFile, prepareMediaCleanup, finishMediaCleanup } from "./editor-media-cleanup.mjs";
 import {
   SLUG_PATTERN,
   MAX_POST_BYTES,
@@ -190,6 +191,7 @@ export function createEditorService(options = {}) {
   const stateRoot = join(appRoot, ".editor");
   const draftsRoot = join(stateRoot, "drafts");
   const mediaRoot = join(stateRoot, "media");
+  const cleanupRoot = join(stateRoot, "image-cleanup");
   const postsRoot = join(appRoot, "content", "posts");
   const uploadsRoot = join(appRoot, "public", "uploads");
   const reservedSlugs = new Set(options.reservedSlugs || []);
@@ -417,7 +419,43 @@ export function createEditorService(options = {}) {
     }
   }
 
-  // 게시글과 참조 이미지만 커밋한 후 기존 원격으로 발행
+  // 이전 버전에서 빠진 이미지와 실패 후 정리 대기 목록 준비
+  async function preparePublicationCleanup(publication, previous) {
+    const path = join(cleanupRoot, publication.id + ".json");
+    try {
+      const stored = await readCleanupFile(appRoot, path);
+      const record = stored ? JSON.parse(stored.bytes.toString("utf8")) : { postId: publication.id, assets: [] };
+      if (record.postId !== publication.id || !Array.isArray(record.assets)) throw editorError(409, "이미지 정리 기록을 확인해 주세요.");
+      if (!previous && !record.assets.length) return { assets: [], pending: [] };
+      const plan = await prepareMediaCleanup({ appRoot, repoRoot, publication, previous, candidates: record.assets, git });
+      if (!plan.pending.length) return { assets: [], pending: [] };
+      await ensureDirectory(appRoot, cleanupRoot);
+      await writeJson(path, { postId: publication.id, assets: plan.pending });
+      return { ...plan, journal: await readCleanupFile(appRoot, path) };
+    } catch (error) {
+      console.warn("편집기 이미지 정리를 보류했습니다:", error.code || error.name);
+      return { assets: [], pending: [], skipped: true };
+    }
+  }
+
+  // 푸시 성공 후 참조를 재확인한 로컬 원본과 정리 기록 갱신
+  async function completePublicationCleanup(publication, plan) {
+    if (!plan.journal) return { removed: 0, pending: 0, skipped: Boolean(plan.skipped) };
+    try {
+      const current = await readCleanupFile(appRoot, plan.journal.path);
+      if (!current || current.dev !== plan.journal.dev || current.ino !== plan.journal.ino || !current.bytes.equals(plan.journal.bytes)) throw editorError(409, "이미지 정리 기록이 변경됐습니다.");
+      const completed = new Set(await finishMediaCleanup({ appRoot, repoRoot, publication, assets: plan.assets, git }));
+      const pending = plan.pending.filter((asset) => !completed.has(asset.name));
+      if (pending.length) await writeJson(plan.journal.path, { postId: publication.id, assets: pending });
+      else await removeCleanupFile(appRoot, current);
+      return { removed: completed.size, pending: pending.length, skipped: false };
+    } catch (error) {
+      console.warn("편집기 로컬 이미지 정리를 보류했습니다:", error.code || error.name);
+      return { removed: 0, pending: plan.pending.length, skipped: true };
+    }
+  }
+
+  // 게시글과 참조 이미지 및 미사용 이미지 삭제를 같은 커밋으로 발행
   async function publishRecord(value) {
     const draft = await saveDraftRecord(value);
     validatePostSubtitle(draft);
@@ -426,13 +464,16 @@ export function createEditorService(options = {}) {
     await validatePublication(publication);
     await validateGitState();
     const postPath = join(postsRoot, publication.slug + ".json");
+    const previous = await readOptional(postPath);
+    const cleanup = await preparePublicationCleanup(publication, previous ? parseBlogDocument(JSON.parse(previous.toString("utf8")), { publish: true }) : null);
     const mediaPaths = media.map((item) => join(uploadsRoot, item.id + "." + item.extension));
-    const paths = [postPath, ...mediaPaths].map((path) => relative(repoRoot, path));
+    const retiredMedia = cleanup.assets.map((asset) => asset.publicFile).filter(Boolean);
+    const paths = [postPath, ...mediaPaths, ...retiredMedia.map((item) => item.path)].map((path) => relative(repoRoot, path));
     if (await git(["diff", "--cached", "--name-only", "--", ...paths])) throw editorError(409, "이 글의 파일이 이미 스테이징되어 있습니다. Git 작업을 마친 뒤 다시 발행해 주세요.");
     if (await git(["diff", "--name-only", "--", relative(repoRoot, postPath)])) throw editorError(409, "발행 파일이 다른 곳에서 수정됐습니다. 변경사항을 먼저 확인해 주세요.");
-    const previous = await readOptional(postPath);
     const publishedBytes = Buffer.from(JSON.stringify(publication, null, 2) + "\n");
     const createdMedia = [];
+    const removedMedia = [];
     let committing = false;
     try {
       await ensureDirectory(appRoot, uploadsRoot);
@@ -445,6 +486,10 @@ export function createEditorService(options = {}) {
           await copyFile(media[index].path, mediaPaths[index], constants.COPYFILE_EXCL);
           createdMedia.push({ path: mediaPaths[index], bytes: source });
         }
+      }
+      for (const item of retiredMedia) {
+        await removeCleanupFile(appRoot, item);
+        removedMedia.push(item);
       }
       await writeJson(postPath, publication);
       committing = true;
@@ -462,6 +507,9 @@ export function createEditorService(options = {}) {
         const currentImage = await readOptional(item.path);
         if (currentImage?.equals(item.bytes)) await rm(item.path, { force: true });
       }
+      for (const item of removedMedia) {
+        await restoreCleanupFile(appRoot, item).catch((failure) => console.warn("편집기 이미지 복원을 보류했습니다:", failure.code || failure.name));
+      }
       if (error.status) throw error;
       throw editorError(500, committing ? "글은 임시 저장됐지만 커밋에 실패했습니다. Git 이름과 이메일 및 저장소 상태를 확인해 주세요." : "발행할 파일을 저장하지 못했습니다. 저장 폴더 상태를 확인해 주세요.", committing ? "COMMIT_FAILED" : "PUBLISH_FAILED");
     }
@@ -471,7 +519,8 @@ export function createEditorService(options = {}) {
     } catch {
       throw editorError(502, "글은 커밋됐지만 푸시에 실패했습니다. Git 연결을 확인한 뒤 다시 발행해 주세요.", "PUSH_FAILED", commit);
     }
-    return { draft, slug: publication.slug, url: "/posts/" + publication.slug + "/", commit, pushed: true };
+    const cleanupResult = await completePublicationCleanup(publication, cleanup);
+    return { draft, slug: publication.slug, url: "/posts/" + publication.slug + "/", commit, pushed: true, cleanup: cleanupResult };
   }
 
   return {

@@ -403,6 +403,174 @@ test("이미지를 재작성한 글만 커밋하며 다른 스테이징과 READM
   strict.equal(await git(remote, "rev-parse", "main"), result.commit);
 });
 
+test("수정 발행 성공은 다른 글에서 쓰지 않는 이전 공개 이미지와 로컬 원본을 같은 작업으로 정리한다", async (context) => {
+  const { root, appRoot, service, remote } = await fixture(context);
+  const first = await service.uploadMedia(tinyPng, "이전.png");
+  const unused = await service.uploadMedia(tinyPng, "다른 미저장 이미지.png");
+  const original = await service.publish(document({ content: { type: "doc", content: [{ type: "image", attrs: first }] }, markdown: "![이전](" + first.src + ")" }));
+  const firstId = first.src.split("/").at(-1);
+  const oldPublic = join(appRoot, "public/uploads", firstId + ".png");
+  const second = await service.uploadMedia(tinyPng, "새 이미지.png");
+  await writeFile(join(root, "unrelated.txt"), "Keep staged\n");
+  await git(root, "add", "unrelated.txt");
+  const updated = await service.publish({ ...original.draft, content: { type: "doc", content: [{ type: "image", attrs: second }] }, markdown: "![새 이미지](" + second.src + ")" });
+  await strict.rejects(readFile(oldPublic), { code: "ENOENT" });
+  await strict.rejects(service.readMedia(firstId), { status: 404 });
+  await strict.rejects(readFile(join(appRoot, ".editor/media", firstId + ".json")), { code: "ENOENT" });
+  strict.deepEqual(await readFile(join(appRoot, "public/uploads", second.src.split("/").at(-1) + ".png")), tinyPng);
+  strict.deepEqual(await readFile((await service.readMedia(unused.src.split("/").at(-1))).path), tinyPng);
+  strict.equal(await git(root, "diff", "--cached", "--name-only"), "unrelated.txt");
+  strict.match(await git(root, "diff", "--no-renames", "HEAD~1", "HEAD", "--name-status"), new RegExp("D\\s+public/uploads/" + firstId));
+  strict.equal(await git(remote, "rev-parse", "main"), updated.commit);
+  strict.deepEqual(updated.cleanup, { removed: 1, pending: 0, skipped: false });
+  strict.deepEqual(await readdir(join(appRoot, ".editor/image-cleanup")), []);
+  await strict.rejects(git(remote, "cat-file", "-e", "main:public/uploads/" + firstId + ".png"));
+});
+
+test("이미지를 교체하지 않고 삭제만 해도 성공한 수정에서 이전 이미지 파일을 정리한다", async (context) => {
+  const { appRoot, service } = await fixture(context);
+  const image = await service.uploadMedia(tinyPng, "삭제할 이미지.png");
+  const original = await service.publish(document({ content: { type: "doc", content: [{ type: "image", attrs: image }] } }));
+  const result = await service.publish({ ...original.draft, content: document().content });
+  const id = image.src.split("/").at(-1);
+  await strict.rejects(readFile(join(appRoot, "public/uploads", id + ".png")), { code: "ENOENT" });
+  await strict.rejects(service.readMedia(id), { status: 404 });
+  strict.deepEqual(result.cleanup, { removed: 1, pending: 0, skipped: false });
+});
+
+test("공유 초안 때문에 보류한 이미지는 공유가 끝난 다음 수정 발행에서 정리한다", async (context) => {
+  const { appRoot, service } = await fixture(context);
+  const first = await service.uploadMedia(tinyPng, "나중에 정리.png");
+  const original = await service.publish(document({ content: { type: "doc", content: [{ type: "image", attrs: first }] } }));
+  const other = await service.saveDraft(document({ title: "아직 공유 중인 초안", content: { type: "doc", content: [{ type: "image", attrs: first }] } }));
+  const second = await service.uploadMedia(tinyPng, "교체 이미지.png");
+  const changed = await service.publish({ ...original.draft, content: { type: "doc", content: [{ type: "image", attrs: second }] } });
+  strict.deepEqual(changed.cleanup, { removed: 0, pending: 1, skipped: false });
+  await service.deleteDraft(other.id, other.updatedAt);
+  const result = await service.publish({ ...changed.draft, title: "공유가 끝난 뒤 수정" });
+  const id = first.src.split("/").at(-1);
+  await strict.rejects(readFile(join(appRoot, "public/uploads", id + ".png")), { code: "ENOENT" });
+  await strict.rejects(service.readMedia(id), { status: 404 });
+  strict.deepEqual(result.cleanup, { removed: 1, pending: 0, skipped: false });
+});
+
+test("다른 발행 글과 초안의 본문 및 마크다운 링크가 참조하는 이전 이미지는 보존한다", async (context) => {
+  for (const reference of ["published", "draft", "markdown"]) {
+    const { appRoot, service } = await fixture(context);
+    const first = await service.uploadMedia(tinyPng, "공유.png");
+    const original = await service.publish(document({ content: { type: "doc", content: [{ type: "image", attrs: first }] } }));
+    const id = first.src.split("/").at(-1);
+    const other = document({ title: "공유한 다른 글", content: { type: "doc", content: [{ type: "image", attrs: first }] } });
+    if (reference === "published") await service.publish(other);
+    else if (reference === "draft") await service.saveDraft(other);
+    else await service.saveDraft(document({ markdown: "[원본 이미지](/uploads/" + id + ".png)", title: "링크만 남긴 초안" }));
+    const second = await service.uploadMedia(tinyPng, "교체.png");
+    await service.publish({ ...original.draft, content: { type: "doc", content: [{ type: "image", attrs: second }] } });
+    strict.deepEqual(await readFile(join(appRoot, "public/uploads", id + ".png")), tinyPng, reference);
+    strict.deepEqual(await readFile((await service.readMedia(id)).path), tinyPng, reference);
+  }
+});
+
+test("이미지 삭제를 포함한 수정 커밋 실패는 이전 공개 파일과 이미지를 복원한다", async (context) => {
+  const { root, appRoot, service } = await fixture(context);
+  const first = await service.uploadMedia(tinyPng, "복원할 이전.png");
+  const original = await service.publish(document({ content: { type: "doc", content: [{ type: "image", attrs: first }] } }));
+  const previous = await readFile(join(appRoot, "content/posts", original.slug + ".json"));
+  const id = first.src.split("/").at(-1);
+  const second = await service.uploadMedia(tinyPng, "실패할 새 이미지.png");
+  const replacement = { ...original.draft, content: { type: "doc", content: [{ type: "image", attrs: second }] } };
+  await git(root, "config", "user.name", "");
+  await strict.rejects(service.publish(replacement), { code: "COMMIT_FAILED" });
+  strict.deepEqual(await readFile(join(appRoot, "content/posts", original.slug + ".json")), previous);
+  strict.deepEqual(await readFile(join(appRoot, "public/uploads", id + ".png")), tinyPng);
+  strict.deepEqual(await readFile((await service.readMedia(id)).path), tinyPng);
+  strict.equal(await git(root, "diff", "--cached", "--name-only"), "");
+  await git(root, "config", "user.name", "Editor Test");
+  await service.publish(await service.readDraft(original.draft.id));
+  await strict.rejects(readFile(join(appRoot, "public/uploads", id + ".png")), { code: "ENOENT" });
+  await strict.rejects(service.readMedia(id), { status: 404 });
+});
+
+test("다른 글의 미커밋 변경이 참조를 지워도 실제 배포된 Git 버전의 공유 이미지는 보존한다", async (context) => {
+  const { root, appRoot, service } = await fixture(context);
+  const first = await service.uploadMedia(tinyPng, "배포 공유.png");
+  const original = await service.publish(document({ content: { type: "doc", content: [{ type: "image", attrs: first }] } }));
+  const shared = await service.publish(document({ title: "공유하는 다른 글", content: { type: "doc", content: [{ type: "image", attrs: first }] } }));
+  await service.deleteDraft(shared.draft.id, shared.draft.updatedAt);
+  const path = join(appRoot, "content/posts", shared.slug + ".json");
+  const changed = { ...JSON.parse(await readFile(path, "utf8")), content: document().content, heroImage: undefined };
+  await writeFile(path, JSON.stringify(changed));
+  await git(root, "add", path);
+  const second = await service.uploadMedia(tinyPng, "교체 새 이미지.png");
+  await service.publish({ ...original.draft, content: { type: "doc", content: [{ type: "image", attrs: second }] } });
+  const id = first.src.split("/").at(-1);
+  strict.deepEqual(await readFile(join(appRoot, "public/uploads", id + ".png")), tinyPng);
+  strict.deepEqual(await readFile((await service.readMedia(id)).path), tinyPng);
+  strict.match(await git(root, "diff", "--cached", "--name-only"), /content\/posts\//);
+});
+
+test("로컬 업로드 원본이 없는 새 작업 환경에서도 이전 공개 이미지를 정리한다", async (context) => {
+  const { appRoot, service } = await fixture(context);
+  const first = await service.uploadMedia(tinyPng, "이전 환경.png");
+  const original = await service.publish(document({ content: { type: "doc", content: [{ type: "image", attrs: first }] } }));
+  await rm(join(appRoot, ".editor"), { recursive: true, force: true });
+  const restarted = createEditorService({ appRoot });
+  const current = await restarted.readDraft(original.draft.id);
+  const second = await restarted.uploadMedia(tinyPng, "새 환경.png");
+  await restarted.publish({ ...current, content: { type: "doc", content: [{ type: "image", attrs: second }] } });
+  await strict.rejects(readFile(join(appRoot, "public/uploads", first.src.split("/").at(-1) + ".png")), { code: "ENOENT" });
+});
+
+test("푸시 실패에서는 임시 원본을 남기고 서버 재시작 후 같은 커밋 재시도로 정리를 마친다", async (context) => {
+  let pushes = 0;
+  const { root, appRoot, service, remote } = await fixture(context, { push: async ({ git: run }) => {
+    pushes += 1;
+    if (pushes === 2) throw new Error("offline");
+    await run(["push", "origin", "main"]);
+  } });
+  const first = await service.uploadMedia(tinyPng, "재시도 이전.png");
+  const original = await service.publish(document({ content: { type: "doc", content: [{ type: "image", attrs: first }] } }));
+  const id = first.src.split("/").at(-1);
+  const second = await service.uploadMedia(tinyPng, "재시도 새 이미지.png");
+  await strict.rejects(service.publish({ ...original.draft, content: { type: "doc", content: [{ type: "image", attrs: second }] } }), { code: "PUSH_FAILED" });
+  const commit = await git(root, "rev-parse", "HEAD");
+  strict.deepEqual(await readFile((await service.readMedia(id)).path), tinyPng);
+  await git(remote, "cat-file", "-e", "main:public/uploads/" + id + ".png");
+  const restarted = createEditorService({ appRoot });
+  const result = await restarted.publish(await restarted.readDraft(original.draft.id));
+  strict.equal(result.commit, commit);
+  strict.equal(await git(remote, "rev-parse", "main"), commit);
+  strict.deepEqual(result.cleanup, { removed: 1, pending: 0, skipped: false });
+  await strict.rejects(readFile(join(appRoot, "public/uploads", id + ".png")), { code: "ENOENT" });
+  await strict.rejects(restarted.readMedia(id), { status: 404 });
+});
+
+test("다른 곳에서 수정하거나 스테이징한 이미지와 손상 초안이 있으면 자동 삭제를 보류한다", async (context) => {
+  for (const protection of ["modified", "staged", "symlink", "draft"]) {
+    const { root, appRoot, base, service } = await fixture(context);
+    const first = await service.uploadMedia(tinyPng, "보존 대상.png");
+    const original = await service.publish(document({ content: { type: "doc", content: [{ type: "image", attrs: first }] } }));
+    const id = first.src.split("/").at(-1);
+    const path = join(appRoot, "public/uploads", id + ".png");
+    const changed = Buffer.from("Manual image changes\n");
+    if (protection === "modified" || protection === "staged") {
+      await writeFile(path, changed);
+      if (protection === "staged") await git(root, "add", path);
+    } else if (protection === "symlink") {
+      const outside = join(base, "outside.png");
+      await writeFile(outside, changed);
+      await rm(path);
+      await symlink(outside, path);
+    } else await writeFile(join(appRoot, ".editor/drafts", randomUUID() + ".json"), "broken json");
+    const second = await service.uploadMedia(tinyPng, "교체용.png");
+    await service.publish({ ...original.draft, content: { type: "doc", content: [{ type: "image", attrs: second }] } });
+    strict.deepEqual(await readFile(path), protection === "draft" ? tinyPng : changed, protection);
+    strict.deepEqual(await readFile((await service.readMedia(id)).path), tinyPng, protection);
+    if (protection === "staged") strict.match(await git(root, "diff", "--cached", "--name-only"), /public\/uploads\//);
+    if (protection === "symlink") strict.equal((await lstat(path)).isSymbolicLink(), true);
+  }
+});
+
 test("발행 이미지의 마크다운 목적지도 같은 공개 주소로 바꾸고 코드와 유사한 주소는 보존한다", async (context) => {
   const { appRoot, service } = await fixture(context);
   const first = await service.uploadMedia(tinyPng, "첫 이미지.png");
