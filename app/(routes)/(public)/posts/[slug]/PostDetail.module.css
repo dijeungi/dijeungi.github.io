@@ -151,11 +151,11 @@
 
 .hero {
   width: 100%;
-  padding-bottom: 48px;
+  padding-bottom: 0;
   background: var(--theme-background, #fff);
 }
 .heroGrid {
-  padding-block: 56px 64px;
+  padding-block: 56px 32px;
 }
 .hero.heroWithMedia {
   --hero-media-gap: 50px;
@@ -164,10 +164,10 @@
 .heroWithMedia .heroGrid {
   padding-bottom: var(--hero-media-gap);
 }
-.heroWithMedia + .pageGrid .content > :first-child {
+.hero + .pageGrid .content > :first-child {
   padding-top: 0;
 }
-.heroWithMedia + .pageGrid .richContent > :first-child {
+.hero + .pageGrid .richContent > :first-child {
   margin-top: 0;
 }
 .heading {
@@ -197,9 +197,9 @@
   width: 100%;
   max-width: 760px;
   margin: 0;
-  font-size: 32px;
+  font-size: 28px;
   font-weight: 700;
-  line-height: 44px;
+  line-height: 38px;
   letter-spacing: -0.035em;
   text-wrap: balance;
 }
@@ -363,6 +363,11 @@
   font-weight: 500;
   line-height: 28px;
 }
+.richContent figure + h1:not(:first-child),
+.richContent figure + h2:not(:first-child),
+.richContent figure + h3:not(:first-child) {
+  margin-top: 8px;
+}
 .richContent blockquote {
   margin: 0;
   padding-left: 24px;
@@ -419,33 +424,8 @@
     --page-columns: 12;
     --page-gap: 16px;
   }
-  .heading h1 {
-    font-size: 40px;
-    line-height: 54px;
-  }
   .heroMedia::before {
     aspect-ratio: 16 / 9;
-  }
-}
-@media (min-width: 600px) {
-  .richContent h2 {
-    font-size: 32px;
-    line-height: 40px;
-  }
-  .richContent h3 {
-    font-size: 24px;
-    line-height: 32px;
-  }
-}
-@media (min-width: 1024px) {
-  .richContent h2 {
-    font-size: 44px;
-    line-height: 52px;
-    letter-spacing: -0.5px;
-  }
-  .richContent h3 {
-    font-size: 28px;
-    line-height: 36px;
   }
 }
 @media (min-width: 1025px) {
@@ -486,15 +466,8 @@
     visibility: visible;
     transform: translateX(0);
   }
-  .hero {
-    padding-bottom: 60px;
-  }
   .heroGrid {
-    padding-block: 72px 80px;
-  }
-  .heading h1 {
-    font-size: 48px;
-    line-height: 64px;
+    padding-block: 72px 48px;
   }
   .richContent p:not(.copyFeedback) {
     line-height: 26px;
