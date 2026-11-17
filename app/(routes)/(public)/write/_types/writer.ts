@@ -5,7 +5,7 @@ export type WriterConnection = "loading" | "ready" | "unavailable";
 
 export type WriterIconName = "bold" | "italic" | "strike" | "link" | "bullets" | "numbers" | "code" | "image" | "undo" | "redo" | "back" | "check" | "plus";
 
-export type DraftSummary = Pick<BlogDocument, "id" | "title" | "slug" | "updatedAt"> & { isLocalDraft?: boolean };
+export type DraftSummary = Pick<BlogDocument, "id" | "title" | "slug" | "updatedAt"> & { isLocalDraft?: boolean; isPublished?: boolean };
 
 export type WriterImage = Required<NonNullable<BlogDocument["heroImage"]>>;
 
@@ -16,6 +16,8 @@ export type PublishResult = {
   commit: string;
   pushed: boolean;
 };
+
+export type WriterPublication = PublishResult & { wasEditing: boolean };
 
 export type WriterErrorResponse = {
   error?: string;

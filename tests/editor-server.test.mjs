@@ -136,6 +136,29 @@ test("임시 저장은 공개 파일을 만들지 않으며 이전 버전의 동
   await strict.rejects(service.readDraft("../../README"), { status: 400 });
 });
 
+test("목록은 발행 여부와 로컬 초안 유무를 구분하고 수정 초안을 삭제해도 발행 상태를 유지한다", async (context) => {
+  const { service } = await fixture(context);
+  const local = await service.saveDraft(document({ title: "발행 전 임시글", slug: "" }));
+  const published = await service.publish(document({ title: "이미 발행한 글", slug: "" }));
+  let summaries = await service.listDrafts();
+  strict.equal(summaries.find((item) => item.id === local.id).isLocalDraft, true);
+  strict.equal(summaries.find((item) => item.id === local.id).isPublished, false);
+  strict.equal(summaries.find((item) => item.id === published.draft.id).isLocalDraft, true);
+  strict.equal(summaries.find((item) => item.id === published.draft.id).isPublished, true);
+
+  const edited = await service.saveDraft({ ...published.draft, title: "아직 발행하지 않은 수정 제목" });
+  summaries = await service.listDrafts();
+  strict.equal(summaries.find((item) => item.id === edited.id).title, edited.title);
+  strict.equal(summaries.find((item) => item.id === edited.id).isPublished, true);
+  await service.deleteDraft(edited.id, edited.updatedAt);
+  summaries = await service.listDrafts();
+  const fallback = summaries.find((item) => item.id === edited.id);
+  strict.equal(fallback.isLocalDraft, false);
+  strict.equal(fallback.isPublished, true);
+  strict.equal(fallback.title, published.draft.title);
+  strict.equal(summaries.find((item) => item.id === local.id).isPublished, false);
+});
+
 test("부제목 누락과 빈 값 및 공백은 임시 저장할 수 있지만 발행은 초안만 보존하고 거부한다", async (context) => {
   let pushes = 0;
   const { root, appRoot, service, remote } = await fixture(context, {
@@ -231,7 +254,7 @@ test("발행한 글의 로컬 초안만 삭제하고 공개 글과 업로드 및
   strict.equal((await service.readDraft(published.draft.id)).id, published.draft.id);
   strict.deepEqual(await service.listDrafts(), [{
     id: publication.id, title: publication.title, slug: publication.slug,
-    updatedAt: publication.updatedAt, isLocalDraft: false,
+    updatedAt: publication.updatedAt, isLocalDraft: false, isPublished: true,
   }]);
   await strict.rejects(service.deleteDraft(published.draft.id, publication.updatedAt), { status: 404 });
   strict.equal(await git(root, "rev-parse", "HEAD"), before);

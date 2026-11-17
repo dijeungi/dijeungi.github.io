@@ -60,8 +60,12 @@ function jsonValue(value) {
 async function writerFixture(context, {
   initial,
   queryId = initial?.id,
+  queryPost,
+  locationHref,
+  draftRecords = [],
   storageEntries = [],
   publishedRecords = [],
+  legacySummaries = false,
   hostname = "localhost",
   expectedConnection = "ready",
 } = {}) {
@@ -87,10 +91,14 @@ async function writerFixture(context, {
   const listeners = new Map();
   const listenerSets = new Map();
   const documentListeners = new Map();
-  const documents = new Map(initial ? [[initial.id, structuredClone(initial)]] : []);
+  const documents = new Map([...draftRecords, ...(initial ? [initial] : [])].map((document) => [document.id, structuredClone(document)]));
   const published = new Map(publishedRecords.map((document) => [document.id, structuredClone(document)]));
   const storage = new Map(storageEntries);
-  const location = { hostname, href: "http://" + hostname + ":3000/write/" + (queryId ? "?draft=" + queryId : ""), reload: () => { reloads += 1; } };
+  const parameters = new URLSearchParams();
+  if (queryId) parameters.set("draft", queryId);
+  if (queryPost) parameters.set("post", queryPost);
+  const query = parameters.toString();
+  const location = { hostname, href: locationHref || "http://" + hostname + ":3000/write/" + (query ? "?" + query : ""), reload: () => { reloads += 1; } };
   const router = { replace: (href) => navigation.push(href), push: (href) => navigation.push(href) };
   const document = { activeElement: null };
 
@@ -182,8 +190,14 @@ async function writerFixture(context, {
     if (index !== -1) return overrides.splice(index, 1)[0].reply(request);
     if (path === "/session") return response({ token: "mock-writer-session" });
     if (path === "/drafts" && method === "GET") {
-      const summaries = [...documents.values()].map(({ id, title, slug, updatedAt }) => ({ id, title, slug, updatedAt, isLocalDraft: true }));
-      for (const item of published.values()) if (!documents.has(item.id)) summaries.push({ id: item.id, title: item.title, slug: item.slug, updatedAt: item.updatedAt, isLocalDraft: false });
+      const summaries = [...documents.values()].map(({ id, title, slug, updatedAt }) => ({
+        id, title, slug, updatedAt, isLocalDraft: true,
+        ...(legacySummaries ? {} : { isPublished: published.has(id) }),
+      }));
+      for (const item of published.values()) if (!documents.has(item.id)) summaries.push({
+        id: item.id, title: item.title, slug: item.slug, updatedAt: item.updatedAt, isLocalDraft: false,
+        ...(legacySummaries ? {} : { isPublished: true }),
+      });
       return response({ drafts: summaries });
     }
     if (path === "/drafts" && method === "POST") {
@@ -873,4 +887,156 @@ test("부제목이 비어 있어도 수동 임시저장은 허용하고 발행 �
   assert.equal(fixture.documents.get(fixture.value.draft.id).subtitle, "");
   assert.equal(fixture.value.dirty, false);
   assert.equal(fixture.value.error, "");
+});
+
+test("새 글과 저장한 미발행 초안은 수정 모드가 아니며 첫 발행 성공 이후에만 수정 모드가 된다", async (context) => {
+  const fixture = await writerFixture(context);
+  assert.equal(fixture.value.isEditing, false);
+  fixture.act((writer) => writer.updateDraft({ title: "새로 작성한 글", subtitle: "처음 발행할 부제목", category: "React" }));
+  fixture.edit("임시저장과 발행을 구분하는 본문입니다.");
+  assert.equal(await fixture.act((writer) => writer.saveDraft()), true);
+  await fixture.flush();
+  const saved = structuredClone(fixture.documents.get(fixture.value.draft.id));
+  assert.equal(fixture.value.isEditing, false);
+  assert.equal(fixture.value.drafts.find((item) => item.id === saved.id).isPublished, false);
+  const reloaded = await writerFixture(context, { initial: saved });
+  assert.equal(reloaded.value.isEditing, false);
+  assert.equal(new URL(reloaded.location.href).searchParams.has("post"), false);
+
+  fixture.queue("POST", "/publish", ({ body }) => {
+    fixture.published.set(body.draft.id, structuredClone(body.draft));
+    return response({ draft: body.draft, slug: body.draft.slug, url: "/posts/" + body.draft.slug + "/", commit: "new-publication", pushed: true });
+  });
+  await fixture.act((writer) => writer.publish());
+  await fixture.flush();
+  assert.equal(fixture.value.isEditing, true);
+  assert.equal(fixture.value.published.wasEditing, false);
+});
+
+test("발행한 글의 로컬 초안은 제목 수정과 임시저장 및 새로고침 뒤에도 수정 모드를 유지한다", async (context) => {
+  const published = draft({ slug: "published-canonical-post" });
+  const fixture = await writerFixture(context, { initial: published, publishedRecords: [published] });
+  assert.equal(fixture.value.isEditing, true);
+  assert.equal(new URL(fixture.location.href).searchParams.get("post"), published.slug);
+  fixture.act((writer) => writer.changeTitle("수정한 제목은 기존 글 주소를 바꾸지 않습니다."));
+  assert.equal(fixture.value.isEditing, true);
+  assert.equal(await fixture.act((writer) => writer.saveDraft()), true);
+  await fixture.flush();
+  const saved = structuredClone(fixture.documents.get(published.id));
+  assert.equal(fixture.value.isEditing, true);
+  assert.equal(saved.slug, published.slug);
+  const reloaded = await writerFixture(context, {
+    initial: saved,
+    publishedRecords: [published],
+    locationHref: fixture.location.href,
+  });
+  assert.equal(reloaded.value.isEditing, true);
+  assert.equal(reloaded.value.draft.id, published.id);
+  assert.equal(reloaded.value.draft.title, saved.title);
+  assert.equal(new URL(reloaded.location.href).searchParams.get("post"), published.slug);
+});
+
+test("게시한 글과 미발행 초안을 전환하거나 새 글을 시작하고 수정 초안을 삭제하면 모드도 함께 전환된다", async (context) => {
+  const local = draft({ slug: "local-only-post" });
+  const publishedLocal = draft({ slug: "published-with-draft" });
+  const publishedOnly = draft({ slug: "published-without-draft" });
+  const fixture = await writerFixture(context, {
+    initial: local,
+    draftRecords: [publishedLocal],
+    publishedRecords: [publishedLocal, publishedOnly],
+  });
+  assert.equal(fixture.value.isEditing, false);
+  await fixture.act((writer) => writer.loadDraft(publishedLocal.id));
+  await fixture.flush();
+  assert.equal(fixture.value.isEditing, true);
+  await fixture.act((writer) => writer.loadDraft(publishedOnly.id));
+  await fixture.flush();
+  assert.equal(fixture.value.isEditing, true);
+  await fixture.act((writer) => writer.loadDraft(local.id));
+  await fixture.flush();
+  assert.equal(fixture.value.isEditing, false);
+  assert.equal(new URL(fixture.location.href).searchParams.has("post"), false);
+  await fixture.act((writer) => writer.loadDraft(publishedLocal.id));
+  await fixture.flush();
+  await fixture.act((writer) => writer.newDraft());
+  await fixture.flush();
+  assert.equal(fixture.value.isEditing, false);
+  assert.notEqual(fixture.value.draft.id, publishedLocal.id);
+
+  await fixture.act((writer) => writer.loadDraft(publishedLocal.id));
+  await fixture.flush();
+  fixture.confirm(true);
+  await fixture.act((writer) => writer.deleteDraft(publishedLocal.id));
+  await fixture.flush();
+  assert.equal(fixture.value.isEditing, false);
+  assert.equal(new URL(fixture.location.href).searchParams.has("post"), false);
+  assert.equal(fixture.documents.has(publishedLocal.id), false);
+  assert.equal(fixture.published.has(publishedLocal.id), true);
+  await fixture.act((writer) => writer.loadDraft(publishedLocal.id));
+  await fixture.flush();
+  assert.equal(fixture.value.isEditing, true);
+  assert.equal(fixture.value.draft.id, publishedLocal.id);
+});
+
+test("이전 서버의 수정 URL은 새로고침에도 보존하고 명시한 미발행 상태가 있으면 수정 의도보다 우선한다", async (context) => {
+  const published = draft({ slug: "한글-수정-주소" });
+  const fixture = await writerFixture(context, {
+    initial: published,
+    queryId: null,
+    queryPost: published.slug,
+    publishedRecords: [published],
+    legacySummaries: true,
+  });
+  assert.equal(fixture.value.isEditing, true);
+  const url = new URL(fixture.location.href);
+  assert.equal(url.searchParams.get("post"), published.slug);
+  assert.equal(url.searchParams.get("draft"), published.id);
+  const reloaded = await writerFixture(context, {
+    initial: published,
+    publishedRecords: [published],
+    locationHref: fixture.location.href,
+    legacySummaries: true,
+  });
+  assert.equal(reloaded.value.isEditing, true);
+  const publishedOnly = await writerFixture(context, { publishedRecords: [published], queryId: published.id, legacySummaries: true });
+  assert.equal(publishedOnly.value.isEditing, true);
+
+  const local = draft({ slug: "only-an-unpublished-draft" });
+  const unpublished = await writerFixture(context, { initial: local, queryId: null, queryPost: local.slug });
+  assert.equal(unpublished.value.isEditing, false);
+  assert.equal(unpublished.value.draft.id, local.id);
+  assert.equal(new URL(unpublished.location.href).searchParams.has("post"), false);
+});
+
+test("기존 게시글의 수정 발행이 실패해도 수정 모드와 원문을 보존하고 같은 글로 재시도한다", async (context) => {
+  const published = draft({ slug: "update-existing-post" });
+  const fixture = await writerFixture(context, { initial: published, publishedRecords: [published] });
+  fixture.edit("## 기존 글의 수정 원문\n\n실패해도 다시 같은 게시글을 수정합니다.");
+  fixture.queue("POST", "/publish", ({ body }) => {
+    fixture.documents.set(body.draft.id, { ...body.draft, updatedAt: "2026-11-17T02:00:00.000Z" });
+    return response({ error: "수정 내용 푸시 실패", code: "PUSH_FAILED", commit: "update-commit" }, 502);
+  });
+  await fixture.act((writer) => writer.publish());
+  await fixture.flush();
+  assert.equal(fixture.value.isEditing, true);
+  assert.equal(fixture.value.pendingCommit, "update-commit");
+  assert.match(fixture.value.markdown, /기존 글의 수정 원문/);
+  assert.equal(fixture.value.draft.id, published.id);
+  const pending = deferred();
+  let sent;
+  fixture.queue("POST", "/publish", ({ body }) => { sent = body.draft; return pending.promise; });
+  const updating = fixture.act((writer) => writer.publish());
+  await fixture.flush();
+  assert.equal(fixture.value.isEditing, true);
+  assert.equal(fixture.value.publishing, true);
+  fixture.published.set(sent.id, structuredClone(sent));
+  pending.resolve(response({ draft: sent, slug: sent.slug, url: "/posts/" + sent.slug + "/", commit: "update-commit", pushed: true }));
+  await updating;
+  await fixture.flush();
+  assert.equal(fixture.value.isEditing, true);
+  assert.equal(fixture.value.published.wasEditing, true);
+  assert.equal(fixture.value.pendingCommit, "");
+  assert.equal(sent.id, published.id);
+  assert.equal(sent.slug, published.slug);
+  assert.deepEqual(fixture.navigation, ["/"]);
 });

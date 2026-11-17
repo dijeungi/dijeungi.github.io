@@ -8,7 +8,7 @@ import { useMarkdownInput } from "./useMarkdownInput";
 import { createEmptyDocument, parseBlogDocument, validatePostSubtitle, normalizeDraftMetadata } from "@/app/shared/lib/content";
 
 import type { BlogDocument, RichDocument } from "@/app/shared/types/content";
-import type { DraftSummary, PublishResult, WriterConnection, WriterErrorResponse, WriterImage } from "../_types/writer";
+import type { DraftSummary, PublishResult, WriterConnection, WriterErrorResponse, WriterImage, WriterPublication } from "../_types/writer";
 
 const lastDraftKey = "junho.writer.last-draft";
 const apiBase = "/__editor/api";
@@ -88,12 +88,13 @@ export function usePostWriter() {
   const [publishing, setPublishing] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [switching, setSwitching] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
   const [draftsOpen, setDraftsOpen] = useState(false);
   const [deletingId, setDeletingId] = useState("");
   const [lastSavedAt, setLastSavedAt] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const [published, setPublished] = useState<PublishResult | null>(null);
+  const [published, setPublished] = useState<WriterPublication | null>(null);
   const [pendingCommit, setPendingCommit] = useState("");
   const { confirmation, dialogRef, requestConfirmation, respondToConfirmation } = useWriterDialog();
 
@@ -152,17 +153,19 @@ export function usePostWriter() {
   } = useMarkdownInput(getContent, updateBody, isInputBlocked, setError);
 
   // 화면과 입력창에 같은 글 표시
-  const displayDraft = useCallback((next: BlogDocument, saved = false) => {
+  const displayDraft = useCallback((next: BlogDocument, saved = false, editing = false) => {
     if (!mountedRef.current) return;
     const normalized = normalizeDraftMetadata({ ...next, subtitle: next.subtitle ?? "", readingMinutes: 0 });
     setDocument(normalized);
     savedRef.current = draftFingerprint(normalized);
     storeDraft(normalized);
     setPublished(null);
+    setIsEditing(editing);
     setPendingCommit("");
     setLastSavedAt(saved ? next.updatedAt : "");
     const url = new URL(window.location.href);
-    url.searchParams.delete("post");
+    if (editing && next.slug) url.searchParams.set("post", next.slug);
+    else url.searchParams.delete("post");
     url.searchParams.set("draft", next.id);
     window.history.replaceState(null, "", url);
   }, [setDocument, storeDraft]);
@@ -193,7 +196,9 @@ export function usePostWriter() {
             initial = parseBlogDocument(response.draft);
           }
           if (!active) return;
-          displayDraft(initial || createDraft(), Boolean(initial));
+          const selected = list.drafts.find((item) => item.id === initialId);
+          const editing = selected?.isPublished ?? (selected?.isLocalDraft === false || Boolean(requestedPost));
+          displayDraft(initial || createDraft(), Boolean(initial), Boolean(initial && editing));
         }
         setConnection("ready");
       } catch (failure) {
@@ -337,14 +342,16 @@ export function usePostWriter() {
     try {
       const response = await requestJson<{ draft: BlogDocument }>("/drafts/" + encodeURIComponent(id), tokenRef.current);
       if (!mountedRef.current) return;
-      displayDraft(parseBlogDocument(response.draft), true);
+      const selected = drafts.find((item) => item.id === id);
+      const editing = selected?.isPublished ?? (selected?.isLocalDraft === false || (isEditing && draftRef.current?.id === id));
+      displayDraft(parseBlogDocument(response.draft), true, editing);
       setNotice("");
       setDraftsOpen(false);
       rememberDraft(id);
       focusTitle();
     } catch (failure) { setError(errorMessage(failure)); }
     finally { operationRef.current = ""; setSwitching(false); }
-  }, [canTransition, confirmDiscard, displayDraft, rememberDraft, focusTitle]);
+  }, [drafts, isEditing, canTransition, confirmDiscard, displayDraft, rememberDraft, focusTitle]);
 
   // 저장하지 않은 입력을 확인한 뒤 홈으로 이동
   const leaveWriter = useCallback(async () => {
@@ -428,8 +435,8 @@ export function usePostWriter() {
       });
       if (!mountedRef.current) return;
       const next = parseBlogDocument(result.draft);
-      displayDraft(next, true);
-      setPublished(result);
+      displayDraft(next, true, true);
+      setPublished({ ...result, wasEditing: isEditing });
       await refreshDrafts().catch(() => setNotice("발행 요청은 완료됐지만 임시 글 목록을 갱신하지 못했습니다."));
       if (mountedRef.current && result.pushed) router.replace("/");
     } catch (failure) {
@@ -447,7 +454,7 @@ export function usePostWriter() {
       operationRef.current = "";
       setPublishing(false);
     }
-  }, [connection, getBodyError, persistDraft, refreshDrafts, router, displayDraft, storeDraft]);
+  }, [isEditing, connection, getBodyError, persistDraft, refreshDrafts, router, displayDraft, storeDraft]);
 
   // 입력을 유지하면서 로컬 작성 서버에 다시 연결
   const reconnect = useCallback(() => {
@@ -459,7 +466,7 @@ export function usePostWriter() {
 
   return {
     draft, drafts, markdown, textareaRef, titleRef, draftsButtonRef, draftsOpen, setDraftsOpen,
-    connection, dirty, saving, publishing, uploading, deletingId, lastSavedAt, error, notice,
+    connection, dirty, saving, publishing, uploading, deletingId, lastSavedAt, error, notice, isEditing,
     published, pendingCommit, bodyError, confirmation, dialogRef, respondToConfirmation,
     busy: connection !== "ready" || publishing || switching || Boolean(deletingId),
     updateDraft, changeTitle, changeMarkdown, newDraft, loadDraft, saveDraft, publish, reconnect,

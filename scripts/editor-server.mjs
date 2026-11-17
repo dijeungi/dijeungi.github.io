@@ -316,8 +316,10 @@ export function createEditorService(options = {}) {
     const names = (await readdir(draftsRoot)).filter((name) => name.endsWith(".json") && uuidPattern.test(name.slice(0, -5)));
     const documents = await Promise.all(names.map((name) => readDraft(name.slice(0, -5))));
     const ids = new Set(documents.map((document) => document.id));
-    documents.push(...(await readPublishedDocuments()).filter((document) => !ids.has(document.id)));
-    return documents.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).map(({ id, title, slug, updatedAt }) => ({ id, title, slug, updatedAt, isLocalDraft: ids.has(id) }));
+    const published = await readPublishedDocuments();
+    const publishedIds = new Set(published.map((document) => document.id));
+    documents.push(...published.filter((document) => !ids.has(document.id)));
+    return documents.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).map(({ id, title, slug, updatedAt }) => ({ id, title, slug, updatedAt, isLocalDraft: ids.has(id), isPublished: publishedIds.has(id) }));
   }
 
   // 이미지 메타데이터와 내부 파일 경로 검증
