@@ -219,24 +219,6 @@
 .metaSeparator {
   color: var(--theme-text-muted, #b8bec8);
 }
-.editLink {
-  display: inline-flex;
-  align-items: center;
-  padding: 2px 10px;
-  border-radius: 6px;
-  color: var(--theme-accent-text, #174ea6);
-  background: var(--theme-accent-soft, #edf3fd);
-  font-size: 13px;
-  font-weight: 500;
-  line-height: 24px;
-}
-.editLink:hover {
-  text-decoration: underline;
-}
-.editLink:focus-visible {
-  outline: 2px solid var(--theme-accent, #3182f6);
-  outline-offset: 3px;
-}
 .heroMedia {
   --article-media-width: calc(100% - var(--page-gutter) * 2);
   position: relative;

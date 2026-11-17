@@ -59,7 +59,7 @@ export default async function PostPage({
   return (
     <>
       <ArticleReader key={post.slug} post={post} commentsEnabled />
-      <WriteButton />
+      <WriteButton postSlug={post.slug} />
     </>
   );
 }
