@@ -384,7 +384,6 @@
 }
 .previewHero {
   margin-top: var(--content-gap);
-  border-radius: 8px;
 }
 
 .statusBar {

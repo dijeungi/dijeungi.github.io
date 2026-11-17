@@ -244,7 +244,6 @@
   overflow: hidden;
   outline: 1px solid var(--line);
   outline-offset: -1px;
-  border-radius: 0;
 }
 
 .content {
@@ -377,9 +376,6 @@
 .richContent > figure {
   grid-column: 1 / -1;
 }
-.richImage {
-  border-radius: 8px;
-}
 .richContent figcaption {
   margin-top: 12px;
   color: var(--muted);
@@ -443,11 +439,6 @@
   }
   .richContent p:not(.copyFeedback) {
     line-height: 26px;
-  }
-}
-@media (min-width: 1441px) {
-  .heroMedia {
-    border-radius: 24px;
   }
 }
 @media (max-width: 480px) {

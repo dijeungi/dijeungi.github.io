@@ -2,6 +2,7 @@
 .image {
   --article-media-max-width: 1440px;
   max-width: var(--article-media-max-width);
+  border-radius: 24px;
 }
 
 .frame {
