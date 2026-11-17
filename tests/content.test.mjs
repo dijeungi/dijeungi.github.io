@@ -12,6 +12,7 @@ import {
   createEmptyDocument,
   getFirstContentImage,
   estimateReadingMinutes,
+  validatePostSubtitle,
   normalizeDraftMetadata,
 } from "../app/shared/lib/content.ts";
 
@@ -44,6 +45,26 @@ test("빈 임시 글을 저장하고 기본 정보를 채워 미리 볼 수 있�
   assert.equal(post.title, "제목 없는 글");
   assert.equal(post.date, "2026-11-14");
   assert.equal(post.readingMinutes, 1);
+});
+
+test("마크다운 원문은 공백과 서식을 유지하고 기존 문서는 선택 필드 없이 읽는다", () => {
+  const markdown = "\n## 제목\n\n  **강조**와 한글 😀  \n\n";
+  const result = parseBlogDocument(document({ markdown }));
+  assert.equal(result.markdown, markdown);
+  assert.equal(parseBlogDocument(document()).markdown, undefined);
+  assert.equal(parseBlogDocument(document({ markdown: "" })).markdown, "");
+  assert.throws(() => parseBlogDocument(document({ markdown: null })));
+  assert.throws(() => parseBlogDocument(document({ markdown: { text: "본문" } })));
+  assert.throws(() => parseBlogDocument(document({ markdown: "가".repeat(500001) })));
+});
+
+test("임시저장과 기존 글 읽기는 부제목을 비울 수 있고 새 발행 검증은 부제목을 요구한다", () => {
+  for (const subtitle of [undefined, "", "  \n\t "]) {
+    const draft = parseBlogDocument(document({ subtitle }));
+    assert.throws(() => validatePostSubtitle(draft), { message: "부제목을 입력해 주세요." });
+  }
+  assert.doesNotThrow(() => validatePostSubtitle(parseBlogDocument(document({ subtitle: "  필수 부제목  " }))));
+  assert.equal(parseBlogDocument(document(), { publish: true }).subtitle, undefined);
 });
 
 test("한글 제목에서 경로 구분자 없는 글 주소를 만든다", () => {
@@ -95,7 +116,7 @@ test("링크에 실행 코드와 프로토콜 생략 및 자격 증명을 허용
 });
 
 test("본문에 지원하지 않는 HTML 요소와 중첩 문서를 허용하지 않는다", () => {
-  for (const node of [{ type: "iframe" }, { type: "doc", content: [] }, { type: "heading", attrs: { level: 1 } }]) {
+  for (const node of [{ type: "iframe" }, { type: "doc", content: [] }, { type: "heading", attrs: { level: 4 } }]) {
     assert.throws(() => parseBlogDocument(document({ content: { type: "doc", content: [node] } })));
   }
 });
@@ -138,25 +159,25 @@ test("지나치게 깊은 본문을 거부한다", () => {
 });
 
 test("실제 편집기 문서에서 서식과 이미지 크기 및 코드를 저장할 수 있다", () => {
-  const schema = getSchema([StarterKit.configure({ heading: { levels: [2, 3] } }), Image]);
+  const schema = getSchema([StarterKit.configure({ heading: { levels: [1, 2, 3] } }), Image]);
   const content = schema.nodeFromJSON({
     type: "doc",
     content: [
-      { type: "heading", attrs: { level: 2 }, content: [{ type: "text", text: "소제목" }] },
+      { type: "heading", attrs: { level: 1 }, content: [{ type: "text", text: "제목" }] },
       { type: "paragraph", content: [{ type: "text", text: "중요한 내용", marks: [{ type: "bold" }, { type: "link", attrs: { href: "https://example.com" } }] }] },
       { type: "image", attrs: { src: "/uploads/example.png", alt: "렌더링 과정", width: 800, height: 600 } },
       { type: "codeBlock", attrs: { language: "tsx" }, content: [{ type: "text", text: "const count = 1;\n" }] },
     ],
   }).toJSON();
   const result = parseBlogDocument(document({ content }), { publish: true });
-  assert.equal(result.content.content[0].attrs.level, 2);
+  assert.equal(result.content.content[0].attrs.level, 1);
   assert.equal(result.content.content[1].content[0].marks.find((mark) => mark.type === "link").attrs.href, "https://example.com");
   assert.equal(result.content.content[2].attrs.width, 800);
   assert.equal(result.content.content[2].attrs.height, 600);
   assert.equal(result.content.content[3].content[0].text, "const count = 1;\n");
 });
 
-test("선택 부제목은 기존 소개와 구분하고 비우면 본문 소개로 자동 환원한다", () => {
+test("임시글의 부제목은 기존 소개와 구분하고 비우면 본문 소개로 자동 환원한다", () => {
   const legacy = parseBlogDocument(document());
   assert.equal(legacy.subtitle, undefined);
   assert.equal(legacy.description, "검색 설명");

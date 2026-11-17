@@ -1,20 +1,25 @@
 import { test } from "node:test";
 import { Script } from "node:vm";
+import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { createRequire } from "node:module";
-import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
 import {
   isSafeContentUrl,
   parseBlogDocument,
+  validatePostSubtitle,
   createEmptyDocument,
   normalizeDraftMetadata,
 } from "../app/shared/lib/content.ts";
+import { parseMarkdown, serializeMarkdown } from "../app/shared/lib/markdown.ts";
+import { getMarkdownEdit, getMarkdownImageEdit } from "../app/(routes)/(public)/write/_lib/markdown-edits.ts";
 
 const { transpileModule, ModuleKind, ScriptTarget } = createRequire(import.meta.url)("typescript");
-const source = await readFile(new URL("../app/(routes)/(public)/write/_hooks/usePostWriter.ts", import.meta.url), "utf8");
-const compiled = transpileModule(source, { compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2022 } }).outputText;
+const scripts = new Map(await Promise.all(["usePostWriter", "useMarkdownInput", "useWriterDialog"].map(async (name) => {
+  const source = await readFile(new URL("../app/(routes)/(public)/write/_hooks/" + name + ".ts", import.meta.url), "utf8");
+  return [name, new Script(transpileModule(source, { compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2022 } }).outputText, { filename: name + ".test.cjs" })];
+})));
 
 // 저장과 복구 검증용 글 문서 생성
 function draft(overrides = {}) {
@@ -43,14 +48,20 @@ function deferred() {
 
 // 네트워크 연결 없는 JSON 응답 생성
 function response(value, status = 200) {
-  return { ok: status < 400, json: async () => structuredClone(value) };
+  return { ok: status < 400, json: async () => jsonValue(value) };
 }
 
-// 실제 작성 훅의 상태와 생명주기에 한정한 격리 실행 환경
+// JSON 저장 경계의 필드와 값만 비교
+function jsonValue(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+
+// 실제 마크다운 훅과 확인창을 메모리 API 및 최소 DOM으로 실행
 async function writerFixture(context, {
   initial,
   queryId = initial?.id,
   storageEntries = [],
+  publishedRecords = [],
   hostname = "localhost",
   expectedConnection = "ready",
 } = {}) {
@@ -58,9 +69,10 @@ async function writerFixture(context, {
   let value;
   let sequence = 0;
   let changed = true;
+  let disposed = false;
   let confirmResult = false;
-  let editorOptions;
-  let editorContent = createEmptyDocument();
+  let observedConfirmation = null;
+  let reloads = 0;
   const slots = [];
   const effects = [];
   const requests = [];
@@ -69,22 +81,58 @@ async function writerFixture(context, {
   const confirmations = [];
   const storageReads = [];
   const storageWrites = [];
+  const storageRemovals = [];
   const timers = new Map();
+  const frames = new Map();
   const listeners = new Map();
+  const listenerSets = new Map();
+  const documentListeners = new Map();
   const documents = new Map(initial ? [[initial.id, structuredClone(initial)]] : []);
+  const published = new Map(publishedRecords.map((document) => [document.id, structuredClone(document)]));
   const storage = new Map(storageEntries);
-  const location = { hostname, href: "http://" + hostname + ":3000/write/" + (queryId ? "?draft=" + queryId : "") };
-  const editor = {
-    isActive: () => false,
-    can: () => ({ undo: () => false, redo: () => false }),
-    getText: () => "",
-    getAttributes: () => ({}),
-    getJSON: () => editorContent,
-    setEditable: () => {},
-    commands: { setContent: (next) => { editorContent = structuredClone(next); } },
-  };
-  let editorInstance = editor;
-  const router = { replace: (href) => navigation.push(href) };
+  const location = { hostname, href: "http://" + hostname + ":3000/write/" + (queryId ? "?draft=" + queryId : ""), reload: () => { reloads += 1; } };
+  const router = { replace: (href) => navigation.push(href), push: (href) => navigation.push(href) };
+  const document = { activeElement: null };
+
+  // 브라우저 입력과 모달에서 사용하는 DOM 표면 제공
+  class TestElement {
+    isConnected = true;
+    value = "";
+    selectionStart = 0;
+    selectionEnd = 0;
+    open = false;
+    parentElement = null;
+
+    // 현재 포커스 대상 갱신
+    focus() { document.activeElement = this; }
+
+    // 원문 커서와 선택 범위 반영
+    setSelectionRange(start, end) { this.selectionStart = start; this.selectionEnd = end; }
+
+    // 네이티브 모달 열림 반영
+    showModal() { this.open = true; }
+
+    // 네이티브 모달 닫힘 반영
+    close() { this.open = false; }
+
+    // 확인창 취소 버튼 반환
+    querySelector() { return cancelButton; }
+
+    // 같은 패널의 이벤트 대상 확인
+    contains(target) { return target === this; }
+  }
+
+  const textarea = new TestElement();
+  const title = new TestElement();
+  const cancelButton = new TestElement();
+  const dialog = new TestElement();
+  const draftsButton = new TestElement();
+  draftsButton.parentElement = new TestElement();
+  document.activeElement = textarea;
+  document.body = new TestElement();
+  document.addEventListener = (name, callback) => documentListeners.set(name, callback);
+  document.removeEventListener = (name, callback) => { if (documentListeners.get(name) === callback) documentListeners.delete(name); };
+  document.getElementById = () => null;
 
   // 순서가 보존되는 React 훅 슬롯 조회
   function slot(initialValue) {
@@ -102,6 +150,7 @@ async function writerFixture(context, {
     useState: (initialValue) => {
       const state = slot(() => ({ value: typeof initialValue === "function" ? initialValue() : initialValue }));
       return [state.value, (next) => {
+        if (disposed) return;
         const result = typeof next === "function" ? next(state.value) : next;
         if (!Object.is(state.value, result)) { state.value = result; changed = true; }
       }];
@@ -133,70 +182,109 @@ async function writerFixture(context, {
     if (index !== -1) return overrides.splice(index, 1)[0].reply(request);
     if (path === "/session") return response({ token: "mock-writer-session" });
     if (path === "/drafts" && method === "GET") {
-      return response({ drafts: [...documents.values()].map(({ id, title, slug, updatedAt }) => ({ id, title, slug, updatedAt })) });
+      const summaries = [...documents.values()].map(({ id, title, slug, updatedAt }) => ({ id, title, slug, updatedAt, isLocalDraft: true }));
+      for (const item of published.values()) if (!documents.has(item.id)) summaries.push({ id: item.id, title: item.title, slug: item.slug, updatedAt: item.updatedAt, isLocalDraft: false });
+      return response({ drafts: summaries });
     }
     if (path === "/drafts" && method === "POST") {
-      const saved = { ...body, slug: body.slug || "server-post", updatedAt: new Date(Date.UTC(2026, 10, 15, 0, 0, ++sequence)).toISOString() };
+      const saved = jsonValue(parseBlogDocument({ ...body, slug: body.slug || "server-post", updatedAt: new Date(Date.UTC(2026, 10, 17, 0, 0, ++sequence)).toISOString() }));
       documents.set(saved.id, structuredClone(saved));
       return response({ draft: saved });
     }
-    if (path.startsWith("/drafts/") && method === "GET") {
-      const saved = documents.get(decodeURIComponent(path.slice("/drafts/".length)));
-      assert.ok(saved, "모의 저장소에 존재하는 글만 조회해야 합니다.");
-      return response({ draft: saved });
+    if (path.startsWith("/drafts/")) {
+      const id = decodeURIComponent(path.slice("/drafts/".length));
+      const saved = documents.get(id) ?? published.get(id);
+      if (!saved) return response({ error: "저장한 글을 찾을 수 없습니다." }, 404);
+      if (method === "GET") return response({ draft: saved });
+      if (method === "DELETE") {
+        if (!documents.has(id)) return response({ error: "로컬 임시글이 아닙니다." }, 404);
+        if (saved.updatedAt !== body.expectedUpdatedAt) return response({ error: "다른 창에서 수정된 임시 글입니다.", code: "DRAFT_CONFLICT" }, 409);
+        documents.delete(id);
+        return response({ deleted: id });
+      }
     }
     throw new Error("준비하지 않은 모의 API 요청: " + method + " " + path);
   }
 
+  // 같은 브라우저 이벤트의 모든 구독자 등록
+  function addWindowListener(name, callback) {
+    const callbacks = listenerSets.get(name) ?? new Set();
+    callbacks.add(callback);
+    listenerSets.set(name, callbacks);
+    listeners.set(name, (event) => [...callbacks].forEach((subscriber) => subscriber(event)));
+  }
+
+  // 해제된 브라우저 이벤트 구독자만 제거
+  function removeWindowListener(name, callback) {
+    const callbacks = listenerSets.get(name);
+    callbacks?.delete(callback);
+    if (!callbacks?.size) {
+      listenerSets.delete(name);
+      listeners.delete(name);
+    }
+  }
+
   const window = {
     location,
-    scrollY: 0,
-    confirm: (message) => { confirmations.push(message); return confirmResult; },
-    history: { replaceState: (_state, _title, url) => { location.href = String(url); } },
-    scrollTo: () => {},
-    requestAnimationFrame: (callback) => { callback(); return 1; },
+    history: { replaceState: (_state, _title, url) => { location.href = new URL(String(url), location.href).href; } },
+    requestAnimationFrame: (callback) => { const id = ++sequence; frames.set(id, callback); return id; },
+    cancelAnimationFrame: (id) => frames.delete(id),
+    prompt: () => "https://example.com",
     setTimeout: (callback, delay) => { const id = ++sequence; timers.set(id, { callback, delay }); return id; },
     clearTimeout: (id) => timers.delete(id),
-    addEventListener: (name, callback) => listeners.set(name, callback),
-    removeEventListener: (name, callback) => { if (listeners.get(name) === callback) listeners.delete(name); },
+    addEventListener: addWindowListener,
+    removeEventListener: removeWindowListener,
   };
-  const exports = {};
   const modules = {
     react,
     "next/navigation": { useRouter: () => router },
-    "@/app/shared/lib/content": { isSafeContentUrl, parseBlogDocument, createEmptyDocument, normalizeDraftMetadata },
-    "@tiptap/extension-image": { Image: { configure: () => ({}) } },
-    "@tiptap/starter-kit": { StarterKit: { configure: () => ({}) } },
-    "@tiptap/extension-placeholder": { Placeholder: { configure: () => ({}) } },
-    "@tiptap/react": {
-      useEditor: (options) => { editorOptions = options; return editorInstance; },
-      useEditorState: ({ selector }) => selector({ editor: editorInstance }),
-    },
+    "@/app/shared/lib/content": { isSafeContentUrl, parseBlogDocument, createEmptyDocument, validatePostSubtitle, normalizeDraftMetadata },
+    "@/app/shared/lib/markdown": { parseMarkdown, serializeMarkdown },
+    "../_lib/markdown-edits": { getMarkdownEdit, getMarkdownImageEdit },
   };
-  new Script(compiled, { filename: "usePostWriter.test.cjs" }).runInNewContext({
-    URL, window, Headers, exports, AbortController,
+  const sandbox = {
+    URL, window, document, Headers, AbortController, Error,
+    HTMLElement: TestElement,
+    Node: TestElement,
     fetch: fetchMock,
     crypto: { randomUUID },
     localStorage: {
       getItem: (key) => { storageReads.push(key); return storage.get(key) ?? null; },
-      setItem: (key, next) => {
-        storageWrites.push([key, next]);
-        storage.set(key, next);
-      },
+      setItem: (key, next) => { storageWrites.push([key, next]); storage.set(key, next); },
+      removeItem: (key) => { storageRemovals.push(key); storage.delete(key); },
     },
     require: (name) => { assert.ok(Object.hasOwn(modules, name), "허용한 모듈만 가져와야 합니다: " + name); return modules[name]; },
-  });
+  };
+  for (const name of ["useMarkdownInput", "useWriterDialog", "usePostWriter"]) {
+    const exports = {};
+    scripts.get(name).runInNewContext({ ...sandbox, exports });
+    modules["./" + name] = exports;
+  }
 
-  // 실제 훅 렌더와 변경된 효과 반영
+  // 실제 훅 렌더와 DOM 참조 및 변경된 효과 반영
   function render() {
+    if (disposed) return;
     let count = 0;
     while (changed) {
-      assert.ok(++count < 30, "훅 렌더가 안정된 상태에 도달해야 합니다.");
+      assert.ok(++count < 40, "훅 렌더가 안정된 상태에 도달해야 합니다.");
       cursor = 0;
       changed = false;
-      value = exports.usePostWriter();
+      value = modules["./usePostWriter"].usePostWriter();
+      value.textareaRef.current = textarea;
+      value.titleRef.current = title;
+      value.dialogRef.current = dialog;
+      value.draftsButtonRef.current = draftsButton;
+      textarea.value = value.markdown;
       effects.splice(0).forEach((effect) => effect());
+      if (value.confirmation && value.confirmation !== observedConfirmation) {
+        observedConfirmation = value.confirmation;
+        confirmations.push(structuredClone(value.confirmation));
+        if (confirmResult !== null) value.respondToConfirmation(confirmResult);
+      } else if (!value.confirmation) observedConfirmation = null;
     }
+    const callbacks = [...frames.values()];
+    frames.clear();
+    callbacks.forEach((callback) => callback());
   }
 
   // 비동기 API 완료 뒤 실제 상태 반영
@@ -206,20 +294,39 @@ async function writerFixture(context, {
     render();
   }
 
-  context.after(() => slots.forEach((state) => state.cleanup?.()));
+  // 대기 중인 요청을 유지하면서 실제 훅의 해제 효과 실행
+  function dispose() {
+    if (disposed) return;
+    disposed = true;
+    slots.forEach((state) => state.cleanup?.());
+    value.textareaRef.current = null;
+    value.titleRef.current = null;
+    value.dialogRef.current = null;
+    value.draftsButtonRef.current = null;
+    assert.equal(listeners.size, 0, "해제한 훅의 브라우저 이벤트 구독이 남지 않아야 합니다.");
+    assert.equal(frames.size, 0, "해제한 훅의 화면 갱신 예약이 남지 않아야 합니다.");
+  }
+
+  context.after(dispose);
   await flush();
   assert.equal(value.connection, expectedConnection);
   return {
-    requests, documents, storage, location, listeners, navigation,
-    confirmations, storageReads, storageWrites,
+    requests, documents, published, storage, location, listeners, navigation,
+    confirmations, storageReads, storageWrites, storageRemovals, textarea, dialog,
     get value() { return value; },
-    get editorContent() { return editorContent; },
-    flush,
+    get reloads() { return reloads; },
+    flush, dispose,
     confirm: (result) => { confirmResult = result; },
     act: (action) => { const result = action(value); render(); return result; },
     queue: (method, path, reply) => overrides.push({ method, path, reply }),
-    edit: (next) => { editorContent = structuredClone(next); editorOptions.onUpdate({ editor: editorInstance }); render(); },
-    reconnectEditor: () => { editorContent = createEmptyDocument(); editorInstance = { ...editorInstance }; changed = true; render(); },
+    edit: (next) => {
+      const source = typeof next === "string" ? next : serializeMarkdown(next);
+      textarea.value = source;
+      textarea.selectionStart = source.length;
+      textarea.selectionEnd = source.length;
+      value.changeMarkdown(source);
+      render();
+    },
     advanceTimers: () => {
       const scheduled = [...timers.values()];
       timers.clear();
@@ -230,14 +337,14 @@ async function writerFixture(context, {
 }
 
 test("기존 글의 부제와 첫 이미지로 메타데이터를 갱신하고 재연결 중 입력을 보존한다", async (context) => {
-  const fixture = await writerFixture(context, { initial: draft({ subtitle: undefined, readingMinutes: 12 }) });
+  const first = { src: "/uploads/first.png", alt: "첫 이미지", width: 640, height: 360 };
+  const second = { src: "/uploads/second.png", alt: "다음 이미지", width: 640, height: 360 };
+  const paragraph = { type: "paragraph", content: [{ type: "text", text: "이미지를 담은 본문", marks: [{ type: "bold" }] }] };
+  const fixture = await writerFixture(context, { initial: draft({ subtitle: undefined, readingMinutes: 12, content: { type: "doc", content: [paragraph, { type: "image", attrs: first }, { type: "image", attrs: second }] } }) });
   assert.equal(fixture.value.draft.subtitle, "");
   assert.equal(fixture.value.draft.readingMinutes, 0);
   assert.equal(fixture.value.changeSlug, undefined);
   assert.equal(fixture.value.uploadHeroImage, undefined);
-  const first = { src: "/uploads/first.png", alt: "첫 이미지", width: 640, height: 360 };
-  const second = { src: "/uploads/second.png", alt: "다음 이미지", width: 640, height: 360 };
-  const paragraph = { type: "paragraph", content: [{ type: "text", text: "이미지를 담은 본문", marks: [{ type: "bold" }] }] };
   fixture.edit({ type: "doc", content: [paragraph, { type: "image", attrs: first }, { type: "image", attrs: second }] });
   assert.deepEqual(fixture.value.draft.heroImage, first);
   assert.equal(fixture.value.draft.description, "이미지를 담은 본문");
@@ -250,17 +357,19 @@ test("기존 글의 부제와 첫 이미지로 메타데이터를 갱신하고 �
   fixture.act((writer) => writer.updateDraft({ subtitle: "" }));
   assert.equal(fixture.value.draft.description, "이미지를 담은 본문");
   const current = structuredClone(fixture.value.draft);
-  fixture.reconnectEditor();
+  fixture.act((writer) => writer.reconnect());
   await fixture.flush();
   assert.deepEqual(fixture.value.draft, current);
-  assert.deepEqual(fixture.editorContent, current.content);
+  assert.deepEqual(parseMarkdown(fixture.value.markdown, current.content), current.content);
+  assert.equal(fixture.reloads, 0);
   assert.equal(fixture.value.dirty, true);
   fixture.queue("GET", "/session", () => response({ error: "모의 재연결 실패" }, 503));
-  fixture.reconnectEditor();
+  fixture.act((writer) => writer.reconnect());
   await fixture.flush();
   assert.equal(fixture.value.connection, "unavailable");
   assert.deepEqual(fixture.value.draft, current);
-  assert.deepEqual(fixture.editorContent, current.content);
+  assert.deepEqual(parseMarkdown(fixture.value.markdown, current.content), current.content);
+  assert.equal(fixture.reloads, 0);
   assert.equal(fixture.value.dirty, true);
 });
 
@@ -388,7 +497,7 @@ test("미저장 글의 전환 취소는 입력을 보존하고 확인은 자동�
   await fixture.flush();
   assert.equal(fixture.value.draft.id, target.id);
   assert.equal(fixture.value.draft.subtitle, target.subtitle);
-  assert.deepEqual(fixture.editorContent, parseBlogDocument(target).content);
+  assert.deepEqual(jsonValue(parseMarkdown(fixture.value.markdown, fixture.value.draft.content)), jsonValue(parseBlogDocument(target).content));
   assert.equal(new URL(fixture.location.href).searchParams.get("draft"), target.id);
   assert.equal(fixture.value.busy, false);
   assert.equal(fixture.value.dirty, false);
@@ -469,4 +578,299 @@ test("임시저장 실패는 입력을 보존하고 사용자가 재시도할 �
   assert.equal(fixture.value.dirty, false);
   assert.equal(fixture.value.error, "");
   assert.equal(fixture.requests.filter((request) => request.method === "POST").length, 2);
+});
+
+test("임시글 삭제 취소는 저장한 글과 현재 미저장 원문을 그대로 유지한다", async (context) => {
+  const saved = draft();
+  const fixture = await writerFixture(context, { initial: saved });
+  fixture.edit("## 아직 저장하지 않은 원문\n\n취소하면 이 내용이 남습니다.");
+  const current = structuredClone(fixture.value.draft);
+  fixture.confirm(false);
+  await fixture.act((writer) => writer.deleteDraft(saved.id));
+  await fixture.flush();
+  assert.equal(fixture.confirmations.length, 1);
+  assert.match(fixture.confirmations[0].message, /저장하지 않은 입력/);
+  assert.deepEqual(jsonValue(fixture.value.draft), jsonValue(current));
+  assert.equal(fixture.documents.has(saved.id), true);
+  assert.equal(fixture.value.dirty, true);
+  assert.equal(fixture.requests.filter((request) => request.method === "DELETE").length, 0);
+});
+
+test("현재 임시글만 삭제하고 이미 게시한 글과 다른 임시글은 보존한다", async (context) => {
+  const saved = draft();
+  const other = draft({ title: "다른 임시글", slug: "other-post" });
+  const fixture = await writerFixture(context, { initial: saved, publishedRecords: [saved], storageEntries: [["junho.writer.last-draft", saved.id]] });
+  fixture.documents.set(other.id, other);
+  fixture.edit("삭제 확인을 기다리는 미저장 원문");
+  fixture.confirm(true);
+  await fixture.act((writer) => writer.deleteDraft(saved.id));
+  await fixture.flush();
+  const deletion = fixture.requests.find((request) => request.method === "DELETE");
+  assert.equal(deletion.path, "/drafts/" + saved.id);
+  assert.equal(deletion.body.expectedUpdatedAt, saved.updatedAt);
+  assert.equal(fixture.documents.has(saved.id), false);
+  assert.deepEqual(fixture.documents.get(other.id), other);
+  assert.deepEqual(fixture.published.get(saved.id), saved);
+  assert.notEqual(fixture.value.draft.id, saved.id);
+  assert.equal(fixture.value.draft.title, "");
+  assert.equal(fixture.value.markdown, "");
+  assert.equal(fixture.value.dirty, false);
+  assert.equal(fixture.storage.has("junho.writer.last-draft"), false);
+  assert.ok(fixture.storageRemovals.includes("junho.writer.last-draft"));
+  assert.equal(fixture.value.drafts.find((item) => item.id === saved.id).isLocalDraft, false);
+  assert.match(fixture.value.notice, /삭제/);
+  const deleteCount = fixture.requests.filter((request) => request.method === "DELETE").length;
+  await fixture.act((writer) => writer.deleteDraft(saved.id));
+  await fixture.flush();
+  assert.equal(fixture.requests.filter((request) => request.method === "DELETE").length, deleteCount);
+});
+
+test("삭제 버전 충돌은 현재 입력과 서버 임시글을 보존하고 최신 목록만 갱신한다", async (context) => {
+  const saved = draft();
+  const fixture = await writerFixture(context, { initial: saved });
+  fixture.edit("## 로컬 미저장 원문\n\n다른 창의 글로 덮지 않습니다.");
+  const current = structuredClone(fixture.value.draft);
+  const changedElsewhere = { ...saved, title: "다른 창의 제목", updatedAt: "2026-11-17T02:00:00.000Z" };
+  fixture.documents.set(saved.id, changedElsewhere);
+  fixture.confirm(true);
+  await fixture.act((writer) => writer.deleteDraft(saved.id));
+  await fixture.flush();
+  assert.deepEqual(jsonValue(fixture.value.draft), jsonValue(current));
+  assert.deepEqual(fixture.documents.get(saved.id), changedElsewhere);
+  assert.equal(fixture.value.dirty, true);
+  assert.equal(fixture.value.deletingId, "");
+  assert.match(fixture.value.error, /다른 창/);
+  assert.equal(fixture.value.drafts.find((item) => item.id === saved.id).updatedAt, changedElsewhere.updatedAt);
+  assert.equal(fixture.requests.filter((request) => request.method === "DELETE").length, 1);
+});
+
+test("임시저장 응답 대기 중에는 삭제 확인과 삭제 API 요청을 시작하지 않는다", async (context) => {
+  const saved = draft();
+  const fixture = await writerFixture(context, { initial: saved });
+  const pending = deferred();
+  let snapshot;
+  fixture.edit("저장 중에도 보존할 마크다운");
+  fixture.queue("POST", "/drafts", ({ body }) => { snapshot = body; return pending.promise; });
+  const saving = fixture.act((writer) => writer.saveDraft());
+  assert.equal(fixture.value.saving, true);
+  fixture.confirm(true);
+  await fixture.act((writer) => writer.deleteDraft(saved.id));
+  await fixture.flush();
+  assert.equal(fixture.confirmations.length, 0);
+  assert.equal(fixture.requests.filter((request) => request.method === "DELETE").length, 0);
+  assert.equal(fixture.documents.has(saved.id), true);
+  pending.resolve(response({ draft: { ...snapshot, updatedAt: "2026-11-17T03:00:00.000Z" } }));
+  assert.equal(await saving, true);
+  await fixture.flush();
+});
+
+test("삭제 처리 중에는 중복 삭제와 저장 및 글 전환을 차단한다", async (context) => {
+  const saved = draft();
+  const fixture = await writerFixture(context, { initial: saved });
+  const pending = deferred();
+  fixture.confirm(true);
+  fixture.queue("DELETE", "/drafts/" + saved.id, () => pending.promise);
+  const deleting = fixture.act((writer) => writer.deleteDraft(saved.id));
+  await fixture.flush();
+  assert.equal(fixture.value.deletingId, saved.id);
+  assert.equal(fixture.value.busy, true);
+  const count = fixture.requests.length;
+  await fixture.act((writer) => writer.deleteDraft(saved.id));
+  assert.equal(await fixture.act((writer) => writer.saveDraft()), false);
+  await fixture.act((writer) => writer.newDraft());
+  await fixture.act((writer) => writer.loadDraft(randomUUID()));
+  fixture.edit("삭제 처리 중에는 입력을 바꾸지 않습니다.");
+  assert.equal(fixture.requests.length, count);
+  assert.equal(fixture.value.draft.id, saved.id);
+  assert.notEqual(fixture.value.markdown, "삭제 처리 중에는 입력을 바꾸지 않습니다.");
+  fixture.documents.delete(saved.id);
+  pending.resolve(response({ deleted: saved.id }));
+  await deleting;
+  await fixture.flush();
+  assert.equal(fixture.value.deletingId, "");
+  assert.notEqual(fixture.value.draft.id, saved.id);
+});
+
+test("수동 저장한 원문은 문법과 줄바꿈을 바꾸지 않고 다시 열며 미리보기와 함께 복원한다", async (context) => {
+  const fixture = await writerFixture(context);
+  const fence = String.fromCharCode(96).repeat(3);
+  const source = "## 원문 그대로\n\n**굵게**와 _기울임_을 함께 씁니다.\n\n" + fence + "tsx\nconst label = '<원문>';\n" + fence + "\n\n[링크](https://example.com/docs?q=한글)\n\n";
+  fixture.act((writer) => writer.updateDraft({ title: "원문 보존", category: "React", subtitle: "" }));
+  fixture.edit(source);
+  assert.equal(fixture.value.markdown, source);
+  assert.equal(fixture.value.draft.markdown, source);
+  assert.equal(fixture.value.canUndo, true);
+  assert.equal(await fixture.act((writer) => writer.saveDraft()), true);
+  await fixture.flush();
+  const saved = structuredClone(fixture.documents.get(fixture.value.draft.id));
+  assert.equal(saved.markdown, source);
+  assert.deepEqual(jsonValue(saved.content), jsonValue(parseBlogDocument(draft({ content: parseMarkdown(source) })).content));
+  const reloaded = await writerFixture(context, { initial: saved });
+  assert.equal(reloaded.value.markdown, source);
+  assert.equal(reloaded.textarea.value, source);
+  assert.equal(reloaded.value.draft.markdown, source);
+  assert.deepEqual(jsonValue(reloaded.value.draft.content), jsonValue(saved.content));
+  assert.equal(reloaded.value.canUndo, false);
+  assert.equal(reloaded.value.canRedo, false);
+  assert.equal(reloaded.value.dirty, false);
+});
+
+test("저장 중 새 편집이 없으면 서버가 정규화한 제목과 카테고리를 반영하고 저장 완료로 표시한다", async (context) => {
+  const fixture = await writerFixture(context);
+  const source = "**원문은 공백까지 유지합니다.**\n\n";
+  fixture.act((writer) => writer.updateDraft({ title: "  정규화할 제목  ", category: " React ", subtitle: "  선택 설명  " }));
+  fixture.edit(source);
+  assert.equal(await fixture.act((writer) => writer.saveDraft()), true);
+  await fixture.flush();
+  const saved = fixture.documents.get(fixture.value.draft.id);
+  assert.equal(saved.title, "정규화할 제목");
+  assert.equal(saved.category, "React");
+  assert.equal(saved.subtitle, "선택 설명");
+  assert.equal(fixture.value.draft.title, saved.title);
+  assert.equal(fixture.value.draft.category, saved.category);
+  assert.equal(fixture.value.draft.subtitle, saved.subtitle);
+  assert.equal(fixture.value.markdown, source);
+  assert.equal(fixture.value.draft.markdown, source);
+  assert.equal(fixture.value.dirty, false);
+  assert.equal(fixture.value.lastSavedAt, saved.updatedAt);
+});
+
+test("기존 이미지 삭제와 업로드 이미지 삽입을 실행 취소하거나 다시 실행해도 실제 치수를 보존한다", async (context) => {
+  const image = { src: "/uploads/existing-image.png", alt: "기존 이미지", width: 640, height: 360 };
+  const fixture = await writerFixture(context, { initial: draft({ content: { type: "doc", content: [{ type: "image", attrs: image }] } }) });
+  const original = fixture.value.markdown;
+  fixture.edit("이미지를 지운 본문");
+  assert.equal(fixture.value.draft.heroImage, undefined);
+  fixture.act((writer) => writer.undo());
+  assert.equal(fixture.value.markdown, original);
+  assert.deepEqual(fixture.value.draft.heroImage, image);
+  fixture.act((writer) => writer.redo());
+  assert.equal(fixture.value.markdown, "이미지를 지운 본문");
+  assert.equal(fixture.value.draft.heroImage, undefined);
+
+  const uploaded = { src: "/uploads/uploaded-image.webp", alt: "업로드 이미지", width: 1200, height: 800 };
+  fixture.queue("POST", "/media", () => response({ image: uploaded }));
+  await fixture.act((writer) => writer.uploadInlineImage(new File([new Uint8Array([1, 2, 3])], "memory-image.webp", { type: "image/webp" })));
+  await fixture.flush();
+  const inserted = fixture.value.markdown;
+  assert.match(inserted, /uploaded-image\.webp/);
+  assert.deepEqual(fixture.value.draft.heroImage, uploaded);
+  fixture.act((writer) => writer.undo());
+  assert.equal(fixture.value.markdown, "이미지를 지운 본문");
+  assert.equal(fixture.value.draft.heroImage, undefined);
+  fixture.act((writer) => writer.redo());
+  assert.equal(fixture.value.markdown, inserted);
+  assert.deepEqual(fixture.value.draft.heroImage, uploaded);
+  assert.equal(fixture.value.canRedo, false);
+});
+
+test("저장한 링크의 원문을 수정한 뒤 실행 취소하면 서버 본문 속성과 달라도 미저장 표시가 사라진다", async (context) => {
+  const source = "[링크](https://example.com)";
+  const saved = jsonValue(parseBlogDocument(draft({ subtitle: "", markdown: source, content: parseMarkdown(source) })));
+  const fixture = await writerFixture(context, { initial: saved });
+  assert.equal(fixture.value.markdown, source);
+  assert.equal(fixture.value.dirty, false);
+  fixture.edit(source + "\n\n아직 저장하지 않은 변경");
+  assert.equal(fixture.value.dirty, true);
+  fixture.act((writer) => writer.undo());
+  assert.equal(fixture.value.markdown, source);
+  assert.equal(fixture.value.draft.markdown, source);
+  assert.equal(fixture.value.dirty, false);
+  assert.equal(fixture.value.canRedo, true);
+  await fixture.act((writer) => writer.leaveWriter());
+  await fixture.flush();
+  assert.equal(fixture.confirmations.length, 0);
+  assert.deepEqual(fixture.navigation, ["/"]);
+  assert.equal(fixture.requests.filter((request) => request.method === "POST").length, 0);
+});
+
+test("발행용 임시저장 뒤 목록 응답을 기다리다 화면을 해제하면 발행 POST를 시작하지 않는다", async (context) => {
+  const fixture = await writerFixture(context, { initial: draft() });
+  const pending = deferred();
+  fixture.queue("GET", "/drafts", () => pending.promise);
+  const publishing = fixture.act((writer) => writer.publish());
+  await fixture.flush();
+  assert.equal(fixture.requests.filter((request) => request.path === "/drafts" && request.method === "POST").length, 1);
+  assert.equal(fixture.requests.at(-1).path, "/drafts");
+  assert.equal(fixture.requests.at(-1).method, "GET");
+  assert.equal(fixture.value.publishing, true);
+  assert.equal(fixture.requests.filter((request) => request.path === "/publish").length, 0);
+  fixture.dispose();
+  pending.resolve(response({ drafts: [] }));
+  await publishing;
+  await fixture.flush();
+  assert.equal(fixture.requests.filter((request) => request.path === "/publish").length, 0);
+  assert.deepEqual(fixture.navigation, []);
+});
+
+test("발행 성공 뒤 마지막 목록 응답을 기다리다 화면을 해제하면 뒤늦게 홈으로 이동하지 않는다", async (context) => {
+  const fixture = await writerFixture(context, { initial: draft() });
+  const pending = deferred();
+  const initialLists = fixture.requests.filter((request) => request.path === "/drafts" && request.method === "GET").length;
+  fixture.queue("GET", "/drafts", () => response({ drafts: fixture.value.drafts }));
+  fixture.queue("GET", "/drafts", () => pending.promise);
+  fixture.queue("POST", "/publish", ({ body }) => response({ draft: body.draft, slug: body.draft.slug, url: "/posts/" + body.draft.slug + "/", commit: "mock-published-commit", pushed: true }));
+  const publishing = fixture.act((writer) => writer.publish());
+  await fixture.flush();
+  assert.equal(fixture.requests.filter((request) => request.path === "/publish").length, 1);
+  assert.equal(fixture.requests.filter((request) => request.path === "/drafts" && request.method === "GET").length, initialLists + 2);
+  assert.equal(fixture.value.published.pushed, true);
+  assert.equal(fixture.value.publishing, true);
+  assert.deepEqual(fixture.navigation, []);
+  fixture.dispose();
+  pending.resolve(response({ drafts: [] }));
+  await publishing;
+  await fixture.flush();
+  assert.deepEqual(fixture.navigation, []);
+});
+
+test("부제목이 없거나 비어 있으면 입력을 보존한 채 저장과 발행 요청을 막고 채운 뒤에만 발행한다", async (context) => {
+  for (const subtitle of [undefined, "", " \t "]) {
+    const initial = draft();
+    const fixture = await writerFixture(context, { initial });
+    const source = "## 보존할 본문\n\n부제목을 입력하기 전에도 원문은 남습니다.";
+    fixture.act((writer) => writer.updateDraft({ title: "수정한 발행 제목", category: "TypeScript", subtitle }));
+    fixture.edit(source);
+    const current = jsonValue(fixture.value.draft);
+    await fixture.act((writer) => writer.publish());
+    await fixture.flush();
+    assert.equal(fixture.value.error, "부제목을 입력해 주세요.");
+    assert.equal(fixture.requests.filter((request) => request.method === "POST").length, 0);
+    assert.deepEqual(jsonValue(fixture.value.draft), current);
+    assert.equal(fixture.value.markdown, source);
+    assert.equal(fixture.value.dirty, true);
+    assert.equal(fixture.value.saving, false);
+    assert.equal(fixture.value.publishing, false);
+    assert.equal(fixture.value.published, null);
+    assert.deepEqual(fixture.documents.get(initial.id), initial);
+    assert.deepEqual(fixture.navigation, []);
+    assert.equal(fixture.storageWrites.length, 0);
+
+    fixture.act((writer) => writer.updateDraft({ subtitle: "발행에 필요한 부제목" }));
+    fixture.queue("POST", "/publish", ({ body }) => response({ draft: body.draft, slug: body.draft.slug, url: "/posts/" + body.draft.slug + "/", commit: "mock-subtitle-commit", pushed: true }));
+    await fixture.act((writer) => writer.publish());
+    await fixture.flush();
+    assert.equal(fixture.requests.filter((request) => request.path === "/drafts" && request.method === "POST").length, 1);
+    const publication = fixture.requests.filter((request) => request.path === "/publish");
+    assert.equal(publication.length, 1);
+    assert.equal(publication[0].body.draft.subtitle, "발행에 필요한 부제목");
+    assert.equal(publication[0].body.draft.markdown, source);
+    assert.equal(fixture.value.published.pushed, true);
+    assert.equal(fixture.value.error, "");
+    assert.equal(fixture.value.dirty, false);
+    assert.deepEqual(fixture.navigation, ["/"]);
+  }
+});
+
+test("부제목이 비어 있어도 수동 임시저장은 허용하고 발행 요청은 시작하지 않는다", async (context) => {
+  const fixture = await writerFixture(context);
+  fixture.act((writer) => writer.updateDraft({ title: "작성 중인 글", category: "React", subtitle: "" }));
+  fixture.edit("부제목을 정하기 전에 임시저장하는 본문입니다.");
+  assert.equal(await fixture.act((writer) => writer.saveDraft()), true);
+  await fixture.flush();
+  assert.equal(fixture.requests.filter((request) => request.path === "/drafts" && request.method === "POST").length, 1);
+  assert.equal(fixture.requests.filter((request) => request.path === "/publish").length, 0);
+  assert.equal(fixture.documents.get(fixture.value.draft.id).subtitle, "");
+  assert.equal(fixture.value.dirty, false);
+  assert.equal(fixture.value.error, "");
 });

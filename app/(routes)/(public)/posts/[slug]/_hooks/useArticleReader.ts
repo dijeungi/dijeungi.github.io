@@ -2,21 +2,10 @@
 
 import { useRef, useState, useEffect } from "react";
 
-// 브라우저 클립보드 복사 결과 확인
-async function copyToClipboard(value: string): Promise<boolean> {
-  if (!window.isSecureContext || !navigator.clipboard?.writeText) {
-    return false;
-  }
+import { useCodeCopy } from "@/app/shared/hooks/useCodeCopy";
+import { copyToClipboard } from "@/app/shared/lib/clipboard";
 
-  try {
-    await navigator.clipboard.writeText(value);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-// 본문 읽기 상태와 클립보드 동작 관리
+// 본문 읽기 상태와 공유 링크 복사 관리
 export function useArticleReader() {
   const mountedRef = useRef(false);
   const contentRef = useRef<HTMLElement>(null);
@@ -26,18 +15,14 @@ export function useArticleReader() {
     isReading: false,
   });
   const shareTimerRef = useRef<number | null>(null);
-  const codeTimersRef = useRef<Record<string, number>>({});
   const [shareStatus, setShareStatus] = useState<
     "idle" | "copying" | "success" | "error"
   >("idle");
-  const [codeStatuses, setCodeStatuses] = useState<
-    Record<string, "idle" | "copying" | "success" | "error">
-  >({});
+  const { copyCode, codeStatuses } = useCodeCopy();
 
   useEffect(() => {
     let frameId: number | null = null;
     const content = contentRef.current;
-    const codeTimers = codeTimersRef.current;
     mountedRef.current = true;
 
     if (!content) {
@@ -112,10 +97,6 @@ export function useArticleReader() {
       if (shareTimerRef.current !== null) {
         window.clearTimeout(shareTimerRef.current);
       }
-
-      Object.values(codeTimers).forEach((timerId) =>
-        window.clearTimeout(timerId),
-      );
     };
   }, []);
 
@@ -146,26 +127,6 @@ export function useArticleReader() {
     shareTimerRef.current = window.setTimeout(() => {
       setShareStatus("idle");
       shareTimerRef.current = null;
-    }, 3500);
-  }
-
-  // 코드 예제 복사와 섹션별 결과 안내
-  async function copyCode(sectionId: string, value: string) {
-    window.clearTimeout(codeTimersRef.current[sectionId]);
-    setCodeStatuses((current) => ({ ...current, [sectionId]: "copying" }));
-    const copied = await copyToClipboard(value);
-
-    if (!mountedRef.current) {
-      return;
-    }
-
-    setCodeStatuses((current) => ({
-      ...current,
-      [sectionId]: copied ? "success" : "error",
-    }));
-    codeTimersRef.current[sectionId] = window.setTimeout(() => {
-      setCodeStatuses((current) => ({ ...current, [sectionId]: "idle" }));
-      delete codeTimersRef.current[sectionId];
     }, 3500);
   }
 

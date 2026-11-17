@@ -1,12 +1,15 @@
 import { constants } from "node:fs";
+import MarkdownIt from "markdown-it";
 import { promisify } from "node:util";
 import { imageSize } from "image-size";
 import { createServer } from "node:http";
 import { execFile } from "node:child_process";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import imageRule from "markdown-it/lib/rules_inline/image.mjs";
+import referenceRule from "markdown-it/lib/rules_block/reference.mjs";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import { randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
-import { copyFile, lstat, mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
+import { copyFile, lstat, mkdir, open, readFile, readdir, rename, rm, unlink, writeFile } from "node:fs/promises";
 
 import {
   SLUG_PATTERN,
@@ -15,6 +18,7 @@ import {
   MAX_SLUG_LENGTH,
   slugifyTitle,
   parseBlogDocument,
+  validatePostSubtitle,
 } from "../app/shared/lib/content.ts";
 
 const execFileAsync = promisify(execFile);
@@ -78,6 +82,105 @@ function sameDraft(first, second) {
   delete firstBody.slug;
   delete secondBody.slug;
   return JSON.stringify(firstBody) === JSON.stringify(secondBody);
+}
+
+// 실제 마크다운 구문 위치에서 발행 이미지 주소만 갱신
+function rewriteMarkdownImageSources(markdown, sources) {
+  const offsets = [];
+  const lines = [0];
+  let normalized = "";
+  for (let index = 0; index < markdown.length; index++) {
+    offsets.push(index);
+    const character = markdown[index];
+    normalized += character === "\r" ? "\n" : character === "\0" ? "\uFFFD" : character;
+    if (character === "\r" && markdown[index + 1] === "\n") index++;
+    if (character === "\r" || character === "\n") lines.push(normalized.length);
+  }
+  offsets.push(markdown.length);
+  const parser = new MarkdownIt("commonmark", { html: false }).enable("strikethrough");
+  const parseDestination = parser.helpers.parseLinkDestination;
+  const spans = new Map();
+  let inlineRanges = [];
+  let inlineContent;
+  let active;
+
+  // 파서가 해석한 목적지의 원문 범위 수집
+  function captureDestination(value, start, maximum) {
+    const result = parseDestination(value, start, maximum);
+    if (result.ok && active && value === active.state.src) active.destinations.push({ value, start, end: result.pos, href: parser.normalizeLink(result.str) });
+    return result;
+  }
+
+  // 성공한 이미지와 참조 정의에서만 원문 치환 위치 확정
+  function captureRule(rule, kind) {
+    return (state, ...args) => {
+      const previous = active;
+      const current = { state, destinations: [] };
+      active = current;
+      try {
+        const accepted = rule(state, ...args);
+        if (accepted && args.at(-1) !== true && (kind === "reference" || state.src === inlineContent)) {
+          for (const destination of current.destinations) {
+            const replacement = sources.get(destination.href);
+            if (!replacement) continue;
+            const range = kind === "reference" ? { inlineStart: 0, sourceStart: 0, length: normalized.length }
+              : inlineRanges.find((item) => destination.start >= item.inlineStart && destination.end <= item.inlineStart + item.length);
+            if (!range) continue;
+            let start = range.sourceStart + destination.start - range.inlineStart;
+            let end = range.sourceStart + destination.end - range.inlineStart;
+            if (normalized.slice(start, end) !== destination.value.slice(destination.start, destination.end)) continue;
+            if (normalized[start] === "<") { start++; end--; }
+            spans.set(start, { start: offsets[start], end: offsets[end], replacement });
+          }
+        }
+        return accepted;
+      } finally { active = previous; }
+    };
+  }
+
+  parser.helpers = { ...parser.helpers, parseLinkDestination: captureDestination };
+  parser.block.ruler.at("reference", captureRule(referenceRule, "reference"));
+  parser.inline.ruler.at("image", captureRule(imageRule, "image"));
+  parser.core.ruler.at("inline", (state) => {
+    for (const token of state.tokens) {
+      if (token.type !== "inline") continue;
+      inlineContent = token.content;
+      inlineRanges = [];
+      let inlineStart = 0;
+      for (const [index, line] of token.content.split("\n").entries()) {
+        const sourceStart = lines[token.map[0] + index];
+        const sourceEnd = lines[token.map[0] + index + 1] ?? normalized.length;
+        if (sourceStart === undefined) break;
+        const prefix = line.match(/^[ \t]*/)[0].length;
+        const content = line.slice(prefix);
+        const position = normalized.slice(sourceStart, sourceEnd).indexOf(content);
+        if (position >= 0) inlineRanges.push({ inlineStart: inlineStart + prefix, sourceStart: sourceStart + position, length: content.length });
+        inlineStart += line.length + 1;
+      }
+      parser.inline.parse(token.content, parser, state.env, token.children);
+    }
+  });
+  const parsed = parser.parse(normalized, {});
+  let result = markdown;
+  for (const span of [...spans.values()].sort((first, second) => second.start - first.start)) {
+    result = result.slice(0, span.start) + span.replacement + result.slice(span.end);
+  }
+  const verified = spans.size ? new MarkdownIt("commonmark", { html: false }).enable("strikethrough").parse(result, {}) : parsed;
+  for (const block of verified) {
+    for (const token of block.children || []) {
+      if (token.type !== "image") continue;
+      const source = token.attrGet("src") || "";
+      let path = source;
+      if (/^https?:\/\//i.test(source)) {
+        try {
+          const url = new URL(source);
+          if (isLoopbackOrigin(url.origin)) path = url.pathname;
+        } catch { continue; }
+      }
+      if (path.startsWith("/__editor/")) throw editorError(400, "마크다운 이미지와 본문 이미지가 다릅니다. 본문을 다시 확인해 주세요.", "MARKDOWN_IMAGE_MISMATCH");
+    }
+  }
+  return result;
 }
 
 // 로컬 임시 저장과 제한된 Git 발행 서비스 구성
@@ -176,6 +279,37 @@ export function createEditorService(options = {}) {
     return document;
   }
 
+  // 저장 버전을 확인한 로컬 임시 글 한 개 삭제
+  async function deleteDraftRecord(id, expectedUpdatedAt) {
+    if (typeof id !== "string" || !uuidPattern.test(id)) throw editorError(400, "글 식별자를 확인해 주세요.");
+    if (typeof expectedUpdatedAt !== "string" || expectedUpdatedAt.length > 40 || !Number.isFinite(Date.parse(expectedUpdatedAt))) throw editorError(400, "삭제할 임시 글의 저장 시각을 확인해 주세요.");
+    const normalizedId = id.toLowerCase();
+    const path = join(draftsRoot, normalizedId + ".json");
+    let handle;
+    try {
+      for (const directory of [stateRoot, draftsRoot]) {
+        const stat = await lstat(directory);
+        if (!stat.isDirectory() || stat.isSymbolicLink()) throw editorError(409, "임시 글 저장 경로를 확인해 주세요.", "DRAFT_PATH_INVALID");
+      }
+      const previous = await lstat(path);
+      if (!previous.isFile() || previous.isSymbolicLink()) throw editorError(409, "임시 글 저장 경로를 확인해 주세요.", "DRAFT_PATH_INVALID");
+      handle = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW);
+      const opened = await handle.stat();
+      if (!opened.isFile() || opened.dev !== previous.dev || opened.ino !== previous.ino) throw editorError(409, "임시 글이 변경됐습니다. 목록을 새로 불러와 주세요.", "DRAFT_CONFLICT");
+      const document = parseBlogDocument(JSON.parse(await handle.readFile("utf8")));
+      if (document.id !== normalizedId) throw editorError(409, "임시 글 식별자와 저장 경로가 다릅니다.", "DRAFT_PATH_INVALID");
+      if (document.updatedAt !== expectedUpdatedAt) throw editorError(409, "다른 창에서 수정된 임시 글입니다. 목록을 새로 불러와 주세요.", "DRAFT_CONFLICT");
+      const current = await lstat(path);
+      if (!current.isFile() || current.isSymbolicLink() || current.dev !== opened.dev || current.ino !== opened.ino || current.mtimeMs !== opened.mtimeMs || current.size !== opened.size) throw editorError(409, "임시 글이 변경됐습니다. 목록을 새로 불러와 주세요.", "DRAFT_CONFLICT");
+      await unlink(path);
+      return { deleted: normalizedId };
+    } catch (error) {
+      if (error.code === "ENOENT") throw editorError(404, "이 컴퓨터에 저장된 임시 글을 찾을 수 없습니다.");
+      if (error.code === "ELOOP" || error.code === "ENOTDIR") throw editorError(409, "임시 글 저장 경로를 확인해 주세요.", "DRAFT_PATH_INVALID");
+      throw error;
+    } finally { await handle?.close(); }
+  }
+
   // 저장된 임시 글 목록 조회
   async function listDrafts() {
     await ensureDirectory(appRoot, draftsRoot);
@@ -183,7 +317,7 @@ export function createEditorService(options = {}) {
     const documents = await Promise.all(names.map((name) => readDraft(name.slice(0, -5))));
     const ids = new Set(documents.map((document) => document.id));
     documents.push(...(await readPublishedDocuments()).filter((document) => !ids.has(document.id)));
-    return documents.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).map(({ id, title, slug, updatedAt }) => ({ id, title, slug, updatedAt }));
+    return documents.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).map(({ id, title, slug, updatedAt }) => ({ id, title, slug, updatedAt, isLocalDraft: ids.has(id) }));
   }
 
   // 이미지 메타데이터와 내부 파일 경로 검증
@@ -218,6 +352,7 @@ export function createEditorService(options = {}) {
   async function preparePublication(document) {
     const publication = structuredClone(document);
     const media = new Map();
+    const imageSources = new Map();
     // 문서에 포함된 이미지 주소의 로컬 업로드 확인
     async function convertImage(image) {
       if (!image?.src) return;
@@ -230,10 +365,12 @@ export function createEditorService(options = {}) {
       const match = new URL(source, "http://localhost").pathname.replace(/\/+$/, "").match(mediaPattern);
       if (!match || !uuidPattern.test(match[1])) throw editorError(400, "임시 이미지 주소를 확인해 주세요.");
       const item = await readMedia(match[1]);
+      const originalSource = image.src;
       image.src = "/uploads/" + item.id + "." + item.extension;
       image.width = item.width;
       image.height = item.height;
       media.set(item.id, item);
+      imageSources.set(originalSource, image.src);
     }
     // 본문 이미지 노드 순회
     async function visit(node) {
@@ -242,6 +379,7 @@ export function createEditorService(options = {}) {
     }
     if (publication.subtitle === undefined) await convertImage(publication.heroImage);
     await visit(publication.content);
+    if (publication.markdown !== undefined) publication.markdown = rewriteMarkdownImageSources(publication.markdown, imageSources);
     return { publication: parseBlogDocument(publication, { publish: true }), media: [...media.values()] };
   }
 
@@ -280,6 +418,7 @@ export function createEditorService(options = {}) {
   // 게시글과 참조 이미지만 커밋한 후 기존 원격으로 발행
   async function publishRecord(value) {
     const draft = await saveDraftRecord(value);
+    validatePostSubtitle(draft);
     const { publication, media } = await preparePublication(draft);
     if (Buffer.byteLength(JSON.stringify(publication, null, 2) + "\n") > MAX_POST_BYTES) throw editorError(413, "발행할 본문이 너무 깁니다. 글을 나누거나 일부 내용을 줄여 주세요.");
     await validatePublication(publication);
@@ -337,6 +476,7 @@ export function createEditorService(options = {}) {
     listDrafts,
     readDraft,
     readMedia,
+    deleteDraft: (id, expectedUpdatedAt) => mutate(() => deleteDraftRecord(id, expectedUpdatedAt)),
     saveDraft: (value) => mutate(() => saveDraftRecord(value)),
     uploadMedia: (bytes, name) => mutate(() => uploadMedia(bytes, name)),
     publish: (value) => mutate(() => publishRecord(value)),
@@ -404,7 +544,7 @@ export async function startEditorServer(options = {}) {
       if (method === "GET" && path === "/drafts") { sendJson(response, 200, { drafts: await service.listDrafts() }); return; }
       const draftMatch = path.match(/^\/drafts\/([0-9a-f-]{36})$/i);
       if (method === "GET" && draftMatch) { sendJson(response, 200, { draft: await service.readDraft(draftMatch[1]) }); return; }
-      if (method !== "POST") throw editorError(404, "요청한 편집기 기능을 찾을 수 없습니다.");
+      if (method !== "POST" && !(method === "DELETE" && draftMatch)) throw editorError(404, "요청한 편집기 기능을 찾을 수 없습니다.");
       if (!origin) throw editorError(403, "내 컴퓨터의 편집기에서만 저장할 수 있습니다.");
       if (path === "/media") {
         let name = "이미지";
@@ -419,6 +559,7 @@ export async function startEditorServer(options = {}) {
         if (error.status) throw error;
         throw editorError(400, "요청 본문을 읽을 수 없습니다.");
       }
+      if (method === "DELETE" && draftMatch) { sendJson(response, 200, await service.deleteDraft(draftMatch[1], body?.expectedUpdatedAt)); return; }
       if (path === "/drafts") { sendJson(response, 200, { draft: await service.saveDraft(body) }); return; }
       if (path === "/publish") { sendJson(response, 200, await service.publish(body.draft)); return; }
       throw editorError(404, "요청한 편집기 기능을 찾을 수 없습니다.");

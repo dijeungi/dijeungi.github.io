@@ -1,4 +1,5 @@
 import Image from "next/image";
+import Link from "next/link";
 
 import { formatPostDate } from "@/app/shared/lib/date";
 import { getFirstContentImage } from "@/app/shared/lib/content";
@@ -25,6 +26,9 @@ export function ArticleHero({ post }: ArticleReaderProps) {
             </time>
             <span className={styles.metaSeparator} aria-hidden="true">|</span>
             <span>{post.readingMinutes} min read</span>
+            {process.env.NODE_ENV === "development" && (
+              <Link className={styles.editLink} href={"/write/?post=" + encodeURIComponent(post.slug)} aria-label="이 글 수정">수정</Link>
+            )}
           </div>
         </header>
       </div>

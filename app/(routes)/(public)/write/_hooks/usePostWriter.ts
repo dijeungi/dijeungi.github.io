@@ -1,13 +1,11 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { Image } from "@tiptap/extension-image";
-import { StarterKit } from "@tiptap/starter-kit";
-import { useEditor, useEditorState } from "@tiptap/react";
-import { Placeholder } from "@tiptap/extension-placeholder";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { createEmptyDocument, isSafeContentUrl, parseBlogDocument, normalizeDraftMetadata } from "@/app/shared/lib/content";
+import { useWriterDialog } from "./useWriterDialog";
+import { useMarkdownInput } from "./useMarkdownInput";
+import { createEmptyDocument, parseBlogDocument, validatePostSubtitle, normalizeDraftMetadata } from "@/app/shared/lib/content";
 
 import type { BlogDocument, RichDocument } from "@/app/shared/types/content";
 import type { DraftSummary, PublishResult, WriterConnection, WriterErrorResponse, WriterImage } from "../_types/writer";
@@ -50,16 +48,8 @@ function createDraft(): BlogDocument {
   const now = new Date();
   const date = [now.getFullYear(), String(now.getMonth() + 1).padStart(2, "0"), String(now.getDate()).padStart(2, "0")].join("-");
   return {
-    version: 1,
-    id: crypto.randomUUID(),
-    slug: "",
-    title: "",
-    subtitle: "",
-    description: "",
-    category: "",
-    date,
-    readingMinutes: 0,
-    content: createEmptyDocument(),
+    version: 1, id: crypto.randomUUID(), slug: "", title: "", subtitle: "", description: "",
+    category: "", date, readingMinutes: 0, markdown: "", content: createEmptyDocument(),
     updatedAt: now.toISOString(),
   };
 }
@@ -69,35 +59,64 @@ function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : "요청을 처리하지 못했습니다. 다시 시도해 주세요.";
 }
 
+// 사용자가 편집할 수 있는 값의 저장 기준
+function draftFingerprint(draft: BlogDocument) {
+  const body = draft.markdown === undefined ? draft.content : draft.markdown;
+  return JSON.stringify([draft.title, draft.subtitle, draft.category, draft.date, body, draft.heroImage]);
+}
+
 // 글 작성과 기기 저장 및 발행 상태 관리
 export function usePostWriter() {
   const router = useRouter();
   const tokenRef = useRef("");
-  const revisionRef = useRef(0);
-  const publishBusyRef = useRef(false);
+  const savedRef = useRef("");
+  const mountedRef = useRef(false);
+  const focusFrameRef = useRef(0);
+  const draftsWereOpenRef = useRef(false);
+  const operationRef = useRef("");
+  const uploadingRef = useRef(false);
   const draftRef = useRef<BlogDocument | null>(null);
   const savePromiseRef = useRef<Promise<boolean> | null>(null);
-  const editorScrollRef = useRef(0);
+  const titleRef = useRef<HTMLTextAreaElement>(null);
+  const draftsButtonRef = useRef<HTMLButtonElement>(null);
   const [draft, setDraft] = useState<BlogDocument | null>(null);
   const [drafts, setDrafts] = useState<DraftSummary[]>([]);
   const [connection, setConnection] = useState<WriterConnection>("loading");
+  const [connectionVersion, setConnectionVersion] = useState(0);
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [switching, setSwitching] = useState(false);
-  const [preview, setPreview] = useState(false);
+  const [draftsOpen, setDraftsOpen] = useState(false);
+  const [deletingId, setDeletingId] = useState("");
   const [lastSavedAt, setLastSavedAt] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [published, setPublished] = useState<PublishResult | null>(null);
   const [pendingCommit, setPendingCommit] = useState("");
+  const { confirmation, dialogRef, requestConfirmation, respondToConfirmation } = useWriterDialog();
+
+  // 글 전환 렌더링 이후 제목 입력으로 이동
+  const focusTitle = useCallback(() => {
+    window.cancelAnimationFrame(focusFrameRef.current);
+    focusFrameRef.current = window.requestAnimationFrame(() => titleRef.current?.focus());
+  }, []);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      window.cancelAnimationFrame(focusFrameRef.current);
+    };
+  }, []);
 
   // 편집 글의 메타데이터 정규화와 메모리 상태 반영
   const storeDraft = useCallback((next: BlogDocument) => {
     const normalized = normalizeDraftMetadata(next);
     draftRef.current = normalized;
     setDraft(normalized);
+    setDirty(draftFingerprint(normalized) !== savedRef.current);
   }, []);
 
   // 임시저장한 글의 식별자만 다음 방문을 위해 기억
@@ -111,79 +130,44 @@ export function usePostWriter() {
 
   // 저장 요청 없이 편집 중인 입력 갱신
   const updateDraft = useCallback((changes: Partial<BlogDocument>) => {
-    if (!draftRef.current || publishBusyRef.current) return;
-    const next = {
-      ...draftRef.current,
-      ...changes,
-      ...(changes.content ? { readingMinutes: 0 } : {}),
-    };
-    revisionRef.current += 1;
-    storeDraft(next);
-    setDirty(true);
+    if (!draftRef.current || operationRef.current) return;
+    storeDraft({ ...draftRef.current, ...changes, ...(changes.content ? { readingMinutes: 0 } : {}) });
     setPublished(null);
   }, [storeDraft]);
 
-  const editor = useEditor({
-    immediatelyRender: false,
-    shouldRerenderOnTransaction: false,
-    editable: false,
-    content: { type: "doc", content: [{ type: "paragraph" }] },
-    extensions: [
-      StarterKit.configure({
-        heading: { levels: [2, 3] },
-        link: {
-          openOnClick: false,
-          defaultProtocol: "https",
-          protocols: ["http", "https", "mailto"],
-          isAllowedUri: (url, context) => context.defaultValidate(url) && isSafeContentUrl(url),
-        },
-      }),
-      Image.configure({ allowBase64: false }),
-      Placeholder.configure({ placeholder: "여기에 이야기를 적어보세요. 이미지와 코드도 함께 담을 수 있어요." }),
-    ],
-    editorProps: { attributes: { "aria-label": "글 본문", "data-testid": "post-editor" } },
-    onUpdate: ({ editor: currentEditor }) => {
-      updateDraft({ content: currentEditor.getJSON() as RichDocument });
-    },
-  });
+  // 마크다운 변환에 사용할 현재 본문
+  const getContent = useCallback((): RichDocument => draftRef.current?.content ?? createEmptyDocument(), []);
 
-  const selection = useEditorState({
-    editor,
-    selector: ({ editor: currentEditor }) => ({
-      bold: currentEditor?.isActive("bold") ?? false,
-      italic: currentEditor?.isActive("italic") ?? false,
-      strike: currentEditor?.isActive("strike") ?? false,
-      link: currentEditor?.isActive("link") ?? false,
-      bulletList: currentEditor?.isActive("bulletList") ?? false,
-      orderedList: currentEditor?.isActive("orderedList") ?? false,
-      blockquote: currentEditor?.isActive("blockquote") ?? false,
-      codeBlock: currentEditor?.isActive("codeBlock") ?? false,
-      image: currentEditor?.isActive("image") ?? false,
-      imageAlt: String(currentEditor?.getAttributes("image").alt || ""),
-      level: currentEditor?.isActive("heading", { level: 2 }) ? "2" : currentEditor?.isActive("heading", { level: 3 }) ? "3" : "paragraph",
-      undo: currentEditor?.can().undo() ?? false,
-      redo: currentEditor?.can().redo() ?? false,
-      characters: currentEditor?.getText().length ?? 0,
-    }),
-  });
+  // 원문과 변환된 본문을 같은 입력 상태에 반영
+  const updateBody = useCallback((markdown: string, content: RichDocument | null) => {
+    updateDraft({ markdown, ...(content ? { content } : {}) });
+  }, [updateDraft]);
 
-  // 화면과 편집기에 같은 글 표시
+  // 작업 전환 중 입력 차단
+  const isInputBlocked = useCallback(() => Boolean(operationRef.current), []);
+
+  const {
+    markdown, textareaRef, bodyError, changeMarkdown, insertMarkdown, insertImage,
+    undo, redo, canUndo, canRedo, onMarkdownKeyDown, onMarkdownSelect, setDocument, getBodyError,
+  } = useMarkdownInput(getContent, updateBody, isInputBlocked, setError);
+
+  // 화면과 입력창에 같은 글 표시
   const displayDraft = useCallback((next: BlogDocument, saved = false) => {
-    revisionRef.current += 1;
-    storeDraft({ ...next, subtitle: next.subtitle ?? "", readingMinutes: 0 });
-    setDirty(false);
+    if (!mountedRef.current) return;
+    const normalized = normalizeDraftMetadata({ ...next, subtitle: next.subtitle ?? "", readingMinutes: 0 });
+    setDocument(normalized);
+    savedRef.current = draftFingerprint(normalized);
+    storeDraft(normalized);
     setPublished(null);
     setPendingCommit("");
     setLastSavedAt(saved ? next.updatedAt : "");
-    editor?.commands.setContent(next.content, { emitUpdate: false });
     const url = new URL(window.location.href);
+    url.searchParams.delete("post");
     url.searchParams.set("draft", next.id);
     window.history.replaceState(null, "", url);
-  }, [editor, storeDraft]);
+  }, [setDocument, storeDraft]);
 
   useEffect(() => {
-    if (!editor) return;
-    if (draftRef.current) editor.commands.setContent(draftRef.current.content, { emitUpdate: false });
     const controller = new AbortController();
     let active = true;
     void (async () => {
@@ -194,17 +178,23 @@ export function usePostWriter() {
         const list = await requestJson<{ drafts: DraftSummary[] }>("/drafts", session.token, { signal: controller.signal });
         if (!active) return;
         setDrafts(list.drafts);
-        const requestedId = new URL(window.location.href).searchParams.get("draft");
-        let storedId: string | null = null;
-        try { storedId = localStorage.getItem(lastDraftKey); } catch {}
-        const initialId = requestedId || storedId;
-        let initial: BlogDocument | null = null;
-        if (initialId && list.drafts.some((item) => item.id === initialId)) {
-          const saved = await requestJson<{ draft: BlogDocument }>("/drafts/" + encodeURIComponent(initialId), session.token, { signal: controller.signal });
-          initial = parseBlogDocument(saved.draft);
+        if (!draftRef.current) {
+          const parameters = new URL(window.location.href).searchParams;
+          const requestedId = parameters.get("draft");
+          const requestedSlug = parameters.get("post");
+          const requestedPost = requestedSlug ? list.drafts.find((item) => item.slug === requestedSlug) : undefined;
+          if (requestedSlug && !requestedPost) throw new WriterRequestError("수정할 게시글을 찾지 못했습니다. 글 주소를 확인해 주세요.");
+          let storedId: string | null = null;
+          try { storedId = localStorage.getItem(lastDraftKey); } catch {}
+          const initialId = requestedPost?.id || requestedId || storedId;
+          let initial: BlogDocument | null = null;
+          if (initialId && list.drafts.some((item) => item.id === initialId)) {
+            const response = await requestJson<{ draft: BlogDocument }>("/drafts/" + encodeURIComponent(initialId), session.token, { signal: controller.signal });
+            initial = parseBlogDocument(response.draft);
+          }
+          if (!active) return;
+          displayDraft(initial || createDraft(), Boolean(initial));
         }
-        if (!active) return;
-        if (!draftRef.current) displayDraft(initial || createDraft(), Boolean(initial));
         setConnection("ready");
       } catch (failure) {
         if (!active || controller.signal.aborted) return;
@@ -214,52 +204,78 @@ export function usePostWriter() {
       }
     })();
     return () => { active = false; controller.abort(); };
-  }, [displayDraft, editor]);
-
-  useEffect(() => { editor?.setEditable(connection === "ready" && !publishing && !switching); }, [connection, editor, publishing, switching]);
+  }, [connectionVersion, displayDraft]);
 
   useEffect(() => {
     // 저장 전 페이지 이탈 안내
     function warnBeforeLeave(event: BeforeUnloadEvent) {
-      if (!dirty && !publishing) return;
+      if (!dirty && !publishing && !saving && !uploading) return;
       event.preventDefault();
       event.returnValue = "";
     }
     window.addEventListener("beforeunload", warnBeforeLeave);
     return () => window.removeEventListener("beforeunload", warnBeforeLeave);
-  }, [dirty, publishing]);
+  }, [dirty, publishing, saving, uploading]);
+
+  useEffect(() => {
+    if (!draftsOpen) return;
+    // 임시글 패널 바깥 클릭으로 닫기
+    function closeOutside(event: PointerEvent) {
+      if (event.target instanceof Node && !draftsButtonRef.current?.parentElement?.contains(event.target)) setDraftsOpen(false);
+    }
+    // 임시글 패널 키보드 닫기
+    function closeWithEscape(event: globalThis.KeyboardEvent) {
+      if (event.key === "Escape" && !dialogRef.current?.open) {
+        setDraftsOpen(false);
+        draftsButtonRef.current?.focus();
+      }
+    }
+    window.addEventListener("pointerdown", closeOutside);
+    window.addEventListener("keydown", closeWithEscape);
+    return () => {
+      window.removeEventListener("pointerdown", closeOutside);
+      window.removeEventListener("keydown", closeWithEscape);
+    };
+  }, [dialogRef, draftsOpen]);
+
+  useEffect(() => {
+    if (draftsWereOpenRef.current && !draftsOpen && document.activeElement === document.body) {
+      draftsButtonRef.current?.focus();
+    }
+    draftsWereOpenRef.current = draftsOpen;
+  }, [draftsOpen]);
 
   // 최신 임시 글 목록 갱신
   const refreshDrafts = useCallback(async () => {
     const response = await requestJson<{ drafts: DraftSummary[] }>("/drafts", tokenRef.current);
-    setDrafts(response.drafts);
+    if (mountedRef.current) setDrafts(response.drafts);
   }, []);
 
   // 입력 중 변경을 보존하는 파일 임시저장
-  const saveDraft = useCallback(async (): Promise<boolean> => {
+  const persistDraft = useCallback(async (): Promise<boolean> => {
     if (savePromiseRef.current) return savePromiseRef.current;
     const snapshot = draftRef.current;
-    if (!snapshot || connection !== "ready") return false;
-    const savedRevision = revisionRef.current;
+    if (!mountedRef.current || !snapshot || connection !== "ready" || uploadingRef.current) return false;
+    if (getBodyError()) { setError(getBodyError()); return false; }
     setSaving(true);
     setError("");
     const operation = (async () => {
       try {
         const response = await requestJson<{ draft: BlogDocument }>("/drafts", tokenRef.current, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(snapshot),
+          method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(snapshot),
         });
         const saved = parseBlogDocument(response.draft);
+        if (!mountedRef.current) return false;
         if (draftRef.current?.id === snapshot.id) {
-          const latest = { ...draftRef.current, slug: saved.slug, updatedAt: saved.updatedAt };
-          storeDraft(latest);
+          const normalized = normalizeDraftMetadata({ ...saved, subtitle: saved.subtitle ?? "", readingMinutes: 0 });
+          const changed = draftFingerprint(draftRef.current) !== draftFingerprint(snapshot);
+          savedRef.current = draftFingerprint(normalized);
+          storeDraft(changed ? { ...draftRef.current, slug: saved.slug, updatedAt: saved.updatedAt } : normalized);
           setLastSavedAt(saved.updatedAt);
-          if (revisionRef.current === savedRevision) setDirty(false);
         }
         rememberDraft(saved.id);
         await refreshDrafts().catch(() => setNotice("글은 저장했지만 목록을 갱신하지 못했습니다. 다시 연결하면 저장된 글을 볼 수 있습니다."));
-        return true;
+        return mountedRef.current;
       } catch (failure) {
         setError(errorMessage(failure));
         return false;
@@ -270,46 +286,115 @@ export function usePostWriter() {
     })();
     savePromiseRef.current = operation;
     return operation;
-  }, [connection, refreshDrafts, rememberDraft, storeDraft]);
+  }, [connection, getBodyError, refreshDrafts, rememberDraft, storeDraft]);
+
+  // 수동 저장 요청과 중복 작업 차단
+  const saveDraft = useCallback(async () => {
+    if (!mountedRef.current || operationRef.current || uploadingRef.current) return false;
+    return persistDraft();
+  }, [persistDraft]);
+
+  useEffect(() => {
+    // 수동 임시저장 단축키
+    function saveWithKeyboard(event: globalThis.KeyboardEvent) {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "s") {
+        event.preventDefault();
+        if (!dialogRef.current?.open) void saveDraft();
+      }
+    }
+    window.addEventListener("keydown", saveWithKeyboard);
+    return () => window.removeEventListener("keydown", saveWithKeyboard);
+  }, [dialogRef, saveDraft]);
 
   // 제목 입력과 자동 메타데이터 갱신
-  const changeTitle = useCallback((title: string) => {
-    updateDraft({ title });
-  }, [updateDraft]);
+  const changeTitle = useCallback((title: string) => updateDraft({ title }), [updateDraft]);
+
+  // 저장과 업로드 중 글 전환 차단
+  const canTransition = useCallback(() => mountedRef.current && connection === "ready" && !operationRef.current && !savePromiseRef.current && !uploadingRef.current, [connection]);
+
+  // 미저장 입력을 버리기 전 확인
+  const confirmDiscard = useCallback(async (message: string) => {
+    if (!draftRef.current || draftFingerprint(draftRef.current) === savedRef.current) return true;
+    return requestConfirmation({ title: "저장하지 않은 변경", message, confirmLabel: "변경 버리기", destructive: true });
+  }, [requestConfirmation]);
 
   // 저장하지 않은 입력의 폐기를 확인한 뒤 새 글 시작
-  const newDraft = useCallback(() => {
-    if (publishBusyRef.current || savePromiseRef.current || uploading) return;
-    if (dirty && !window.confirm("임시저장하지 않은 변경을 버리고 새 글을 작성할까요?")) return;
-    publishBusyRef.current = true;
-    setSwitching(true);
-    try {
-      setError("");
-      setNotice("");
-      displayDraft(createDraft());
-    } finally { publishBusyRef.current = false; setSwitching(false); }
-  }, [dirty, displayDraft, uploading]);
+  const newDraft = useCallback(async () => {
+    if (!canTransition() || !(await confirmDiscard("임시저장하지 않은 변경을 버리고 새 글을 작성할까요?")) || !canTransition()) return;
+    setError("");
+    setNotice("");
+    displayDraft(createDraft());
+    setDraftsOpen(false);
+    focusTitle();
+  }, [canTransition, confirmDiscard, displayDraft, focusTitle]);
 
-  // 저장하지 않은 입력의 폐기를 확인한 뒤 임시저장 글 불러오기
+  // 저장하지 않은 입력의 폐기를 확인한 뒤 저장한 글 불러오기
   const loadDraft = useCallback(async (id: string) => {
-    if (id === draftRef.current?.id || connection !== "ready" || publishBusyRef.current || savePromiseRef.current || uploading) return;
-    if (dirty && !window.confirm("임시저장하지 않은 변경을 버리고 다른 글을 열까요?")) return;
-    publishBusyRef.current = true;
+    if (!canTransition() || !(await confirmDiscard("임시저장하지 않은 변경을 버리고 저장된 글을 열까요?")) || !canTransition()) return;
+    operationRef.current = "switching";
     setSwitching(true);
+    setError("");
     try {
-      setError("");
       const response = await requestJson<{ draft: BlogDocument }>("/drafts/" + encodeURIComponent(id), tokenRef.current);
-      const next = parseBlogDocument(response.draft);
-      displayDraft(next, true);
+      if (!mountedRef.current) return;
+      displayDraft(parseBlogDocument(response.draft), true);
       setNotice("");
-      rememberDraft(next.id);
+      setDraftsOpen(false);
+      rememberDraft(id);
+      focusTitle();
     } catch (failure) { setError(errorMessage(failure)); }
-    finally { publishBusyRef.current = false; setSwitching(false); }
-  }, [connection, dirty, displayDraft, rememberDraft, uploading]);
+    finally { operationRef.current = ""; setSwitching(false); }
+  }, [canTransition, confirmDiscard, displayDraft, rememberDraft, focusTitle]);
 
-  // 글 이미지의 로컬 업로드
-  const uploadImage = useCallback(async (file: File): Promise<WriterImage | null> => {
-    if (connection !== "ready" || uploading || publishBusyRef.current) return null;
+  // 저장하지 않은 입력을 확인한 뒤 홈으로 이동
+  const leaveWriter = useCallback(async () => {
+    if (!mountedRef.current || operationRef.current || savePromiseRef.current || uploadingRef.current) return;
+    if (!(await confirmDiscard("임시저장하지 않은 변경을 버리고 나갈까요?"))) return;
+    if (!mountedRef.current || operationRef.current || savePromiseRef.current || uploadingRef.current) return;
+    router.push("/");
+  }, [confirmDiscard, router]);
+
+  // 선택한 로컬 임시글만 버전 확인 후 삭제
+  const deleteDraft = useCallback(async (id: string) => {
+    const selected = drafts.find((item) => item.id === id && item.isLocalDraft === true);
+    if (!selected || !canTransition()) return;
+    const approved = await requestConfirmation({
+      title: "임시글 삭제",
+      message: draftRef.current?.id === id
+        ? "이 임시글을 삭제할까요? 저장하지 않은 입력도 버려집니다. 이미 게시한 글은 삭제되지 않습니다."
+        : "이 임시글을 삭제할까요? 이미 게시한 글은 삭제되지 않습니다.",
+      confirmLabel: "삭제", destructive: true,
+    });
+    if (!approved || !canTransition()) return;
+    operationRef.current = "deleting";
+    setDeletingId(id);
+    setError("");
+    try {
+      const expectedUpdatedAt = draftRef.current?.id === id ? draftRef.current.updatedAt : selected.updatedAt;
+      await requestJson<{ deleted: string }>("/drafts/" + encodeURIComponent(id), tokenRef.current, {
+        method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ expectedUpdatedAt }),
+      });
+      if (!mountedRef.current) return;
+      if (draftRef.current?.id === id) displayDraft(createDraft());
+      try {
+        if (localStorage.getItem(lastDraftKey) === id) localStorage.removeItem(lastDraftKey);
+      } catch {}
+      setDrafts((items) => items.filter((item) => item.id !== id));
+      setNotice("임시글을 삭제했습니다.");
+      await refreshDrafts().catch(() => setNotice("임시글은 삭제했지만 목록을 갱신하지 못했습니다. 다시 연결해 주세요."));
+      draftsButtonRef.current?.focus();
+    } catch (failure) {
+      setError(errorMessage(failure));
+      await refreshDrafts().catch(() => {});
+    } finally { operationRef.current = ""; setDeletingId(""); }
+  }, [drafts, canTransition, requestConfirmation, displayDraft, refreshDrafts]);
+
+  // 업로드한 이미지를 요청한 글의 현재 본문에 삽입
+  const uploadInlineImage = useCallback(async (file: File) => {
+    if (connection !== "ready" || uploadingRef.current || operationRef.current || savePromiseRef.current) return;
+    const id = draftRef.current?.id;
+    if (!id) return;
+    uploadingRef.current = true;
     setUploading(true);
     setError("");
     try {
@@ -318,95 +403,67 @@ export function usePostWriter() {
         headers: { "Content-Type": file.type || "application/octet-stream", "X-File-Name": encodeURIComponent(file.name) },
         body: file,
       });
-      return { ...response.image, alt: response.image.alt || file.name.replace(/\.[^.]+$/, "") };
-    } catch (failure) { setError(errorMessage(failure)); return null; }
-    finally { setUploading(false); }
-  }, [connection, uploading]);
-
-  // 업로드한 이미지를 현재 본문 위치에 삽입
-  const uploadInlineImage = useCallback(async (file: File) => {
-    const image = await uploadImage(file);
-    if (image) editor?.chain().focus().setImage(image).run();
-  }, [editor, uploadImage]);
-
-  // 선택한 글자의 링크 입력과 해제
-  const editLink = useCallback(() => {
-    if (!editor) return;
-    const previous = String(editor.getAttributes("link").href || "");
-    const value = window.prompt("연결할 주소를 입력하세요. 비우면 링크를 해제합니다.", previous);
-    if (value === null) return;
-    const href = value.trim();
-    if (!href) { editor.chain().focus().extendMarkRange("link").unsetLink().run(); return; }
-    if (!isSafeContentUrl(href)) { setError("http, https 또는 메일 주소 형식의 링크를 입력해 주세요."); return; }
-    setError("");
-    editor.chain().focus().extendMarkRange("link").setLink({ href }).run();
-  }, [editor]);
-
-  // 실제 글 상세 화면으로 미리보기 전환
-  const showPreview = useCallback(() => {
-    if (!draftRef.current) return;
-    try {
-      parseBlogDocument(draftRef.current);
-      editorScrollRef.current = window.scrollY;
-      setPreview(true);
-      window.scrollTo({ top: 0, behavior: "instant" });
+      if (!mountedRef.current || draftRef.current?.id !== id) return;
+      insertImage({ ...response.image, alt: response.image.alt || file.name.replace(/\.[^.]+$/, "") });
     } catch (failure) { setError(errorMessage(failure)); }
-  }, []);
-
-  // 작성 중이던 위치로 복귀
-  const closePreview = useCallback(() => {
-    setPreview(false);
-    window.requestAnimationFrame(() => window.scrollTo({ top: editorScrollRef.current, behavior: "instant" }));
-  }, []);
+    finally { uploadingRef.current = false; setUploading(false); }
+  }, [connection, insertImage]);
 
   // 현재 글의 저장과 Git 발행 요청
   const publish = useCallback(async () => {
-    if (!draftRef.current || publishBusyRef.current || connection !== "ready") return;
-    publishBusyRef.current = true;
+    if (!mountedRef.current || !draftRef.current || operationRef.current || uploadingRef.current || connection !== "ready") return;
+    if (getBodyError()) { setError(getBodyError()); return; }
+    try { validatePostSubtitle(draftRef.current); }
+    catch (failure) { setError(errorMessage(failure)); return; }
+    operationRef.current = "publishing";
     setPublishing(true);
     setError("");
     setNotice("");
     try {
-      if (!(await saveDraft())) return;
+      if (savePromiseRef.current && !(await savePromiseRef.current)) return;
+      if (!mountedRef.current || !(await persistDraft()) || !mountedRef.current) return;
       const current = parseBlogDocument(draftRef.current);
       const result = await requestJson<PublishResult>("/publish", tokenRef.current, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ draft: current }),
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ draft: current }),
       });
+      if (!mountedRef.current) return;
       const next = parseBlogDocument(result.draft);
-      storeDraft(next);
-      setDirty(false);
+      displayDraft(next, true);
       setPublished(result);
-      setPendingCommit("");
-      setLastSavedAt(next.updatedAt);
       await refreshDrafts().catch(() => setNotice("발행 요청은 완료됐지만 임시 글 목록을 갱신하지 못했습니다."));
-      if (result.pushed) router.replace("/");
+      if (mountedRef.current && result.pushed) router.replace("/");
     } catch (failure) {
+      if (!mountedRef.current) return;
       setError(errorMessage(failure));
       if (failure instanceof WriterRequestError && failure.commit) setPendingCommit(failure.commit);
       try {
         if (draftRef.current) {
           const response = await requestJson<{ draft: BlogDocument }>("/drafts/" + encodeURIComponent(draftRef.current.id), tokenRef.current);
-          const latest = { ...draftRef.current, slug: response.draft.slug, updatedAt: response.draft.updatedAt };
-          storeDraft(latest);
+          if (!mountedRef.current) return;
+          storeDraft({ ...draftRef.current, slug: response.draft.slug, updatedAt: response.draft.updatedAt });
         }
       } catch {}
     } finally {
-      publishBusyRef.current = false;
+      operationRef.current = "";
       setPublishing(false);
     }
-  }, [connection, refreshDrafts, router, saveDraft, storeDraft]);
+  }, [connection, getBodyError, persistDraft, refreshDrafts, router, displayDraft, storeDraft]);
 
-  // 로컬 작성 서버에 다시 연결
-  const reconnect = useCallback(() => window.location.reload(), []);
+  // 입력을 유지하면서 로컬 작성 서버에 다시 연결
+  const reconnect = useCallback(() => {
+    if (operationRef.current || savePromiseRef.current || uploadingRef.current) return;
+    setConnection("loading");
+    setError("");
+    setConnectionVersion((value) => value + 1);
+  }, []);
 
   return {
-    draft, drafts, editor, selection, connection, dirty, saving, publishing, uploading,
-    preview, lastSavedAt, error, notice, published, pendingCommit,
-    busy: connection !== "ready" || publishing || switching,
-    updateDraft, changeTitle, newDraft, loadDraft, saveDraft,
-    uploadInlineImage, editLink, showPreview, closePreview, publish,
-    reconnect,
+    draft, drafts, markdown, textareaRef, titleRef, draftsButtonRef, draftsOpen, setDraftsOpen,
+    connection, dirty, saving, publishing, uploading, deletingId, lastSavedAt, error, notice,
+    published, pendingCommit, bodyError, confirmation, dialogRef, respondToConfirmation,
+    busy: connection !== "ready" || publishing || switching || Boolean(deletingId),
+    updateDraft, changeTitle, changeMarkdown, newDraft, loadDraft, saveDraft, publish, reconnect,
+    uploadInlineImage, insertMarkdown, undo, redo, canUndo, canRedo,
+    onMarkdownKeyDown, onMarkdownSelect, leaveWriter, deleteDraft,
   };
 }

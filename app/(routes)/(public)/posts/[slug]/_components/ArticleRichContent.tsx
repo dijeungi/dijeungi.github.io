@@ -34,6 +34,7 @@ export function ArticleRichContent({ document, copyCode, codeStatuses }: Article
     if (node.type === "text") return renderText(node, path);
     if (node.type === "paragraph") return <p key={path}>{children?.length ? children : <br />}</p>;
     if (node.type === "heading") {
+      if (node.attrs?.level === 1) return <h1 key={path} id={"heading-" + path}>{children}</h1>;
       return node.attrs?.level === 3
         ? <h3 key={path} id={"heading-" + path}>{children}</h3>
         : <h2 key={path} id={"heading-" + path}>{children}</h2>;

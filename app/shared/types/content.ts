@@ -33,6 +33,7 @@ export type BlogDocument = {
   date: string;
   readingMinutes: number;
   updatedAt: string;
+  markdown?: string;
   content: RichDocument;
   heroImage?: { src: string; alt: string; width?: number; height?: number };
 };

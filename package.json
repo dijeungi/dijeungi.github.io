@@ -20,7 +20,9 @@
     "@tiptap/react": "3.34.0",
     "@tiptap/starter-kit": "3.34.0",
     "image-size": "2.1.0",
+    "markdown-it": "14.3.3",
     "next": "16.4.6",
+    "prosemirror-markdown": "1.13.9",
     "react": "19.3.0",
     "react-dom": "19.3.0"
   },

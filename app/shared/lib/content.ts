@@ -120,7 +120,7 @@ function parseRichDocument(value: unknown, publish: boolean): RichDocument {
     const node: RichNode = { type };
     const attrs = isRecord(input.attrs) ? input.attrs : {};
     if (type === "heading") {
-      if (attrs.level !== 2 && attrs.level !== 3) throw new Error("소제목은 2단계 또는 3단계를 사용해 주세요.");
+      if (attrs.level !== 1 && attrs.level !== 2 && attrs.level !== 3) throw new Error("제목은 1단계부터 3단계까지 사용해 주세요.");
       node.attrs = { level: attrs.level };
     }
     if (type === "orderedList") {
@@ -217,6 +217,11 @@ export function normalizeDraftMetadata(document: BlogDocument): BlogDocument {
   return { ...document, description, heroImage };
 }
 
+// 발행할 글의 필수 부제목 확인
+export function validatePostSubtitle(document: Pick<BlogDocument, "subtitle">): void {
+  if (!document.subtitle?.trim()) throw new Error("부제목을 입력해 주세요.");
+}
+
 // 본문 길이 기반 읽는 시간 추정
 export function estimateReadingMinutes(content: RichDocument): number {
   return Math.max(1, Math.ceil(collectContent(content.content).text.replace(/\s/gu, "").length / 500));
@@ -236,6 +241,7 @@ export function parseBlogDocument(value: unknown, options: ParseBlogDocumentOpti
   const date = readString(value.date, "게시일", 10);
   const updatedAt = readString(value.updatedAt, "저장 시각", 40);
   const content = parseRichDocument(value.content, publish);
+  const markdown = value.markdown === undefined ? undefined : readString(value.markdown, "마크다운 본문", 500000, false);
   if (Array.from(slug).length > MAX_SLUG_LENGTH || new TextEncoder().encode(slug).length > MAX_SLUG_BYTES) {
     throw new Error("글 주소는 96자와 UTF-8 180바이트 이내로 입력해 주세요.");
   }
@@ -253,6 +259,7 @@ export function parseBlogDocument(value: unknown, options: ParseBlogDocumentOpti
   const document: BlogDocument = {
     version: 1, id: value.id.toLowerCase(), slug, title, category, description, date, content,
     ...(subtitle === undefined ? {} : { subtitle }),
+    ...(markdown === undefined ? {} : { markdown }),
     readingMinutes: publish && minutes === 0 ? estimateReadingMinutes(content) : minutes,
     updatedAt: new Date(updatedAt).toISOString(),
   };
