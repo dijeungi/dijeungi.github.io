@@ -23,7 +23,7 @@ try {
   if (major < 24) throw new Error("글쓰기 기능은 Node.js 24 이상에서 실행해 주세요.");
   running = await startEditorServer({ appRoot });
   console.log("글쓰기 API 준비 완료: /write 에서 글을 작성할 수 있습니다.");
-  next = spawn(process.execPath, [resolve(appRoot, "node_modules/next/dist/bin/next"), "dev", ...process.argv.slice(2), "--hostname", "127.0.0.1"], { cwd: appRoot, stdio: "inherit", env: process.env });
+  next = spawn(process.execPath, [resolve(appRoot, "node_modules/next/dist/bin/next"), "dev", "--no-server-fast-refresh", ...process.argv.slice(2), "--hostname", "127.0.0.1"], { cwd: appRoot, stdio: "inherit", env: process.env });
   next.once("error", (error) => { console.error(error.message); void stop("SIGTERM", 1); });
   next.once("exit", (code) => { void stop("SIGTERM", code || 0); });
   process.once("SIGINT", () => { void stop("SIGINT"); });
