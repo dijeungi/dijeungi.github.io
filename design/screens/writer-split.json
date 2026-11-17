@@ -1,0 +1,920 @@
+{
+  "schemaVersion": 1,
+  "id": "writer-split",
+  "name": "JunHo Tech Blog 글쓰기 분할 화면",
+  "product": {
+    "name": "JunHo Tech Blog",
+    "fontFamily": "Pretendard Variable",
+    "fontBasis": "app/styles/typography.css and app/(routes)/(public)/write/Write.module.css",
+    "scope": "design-proposal",
+    "applicationFilesModified": false
+  },
+  "colors": {
+    "light": {
+      "surface": "#ffffff",
+      "preview": "#f8f9fb",
+      "text": "#252d3a",
+      "muted": "#6b7684",
+      "line": "#e7ebf0",
+      "accent": "#3182f6",
+      "accentSoft": "#e8f3ff",
+      "danger": "#cf3b4b"
+    },
+    "dark": {
+      "surface": "#171b22",
+      "preview": "#11151b",
+      "text": "#e8edf4",
+      "muted": "#a7b4c7",
+      "line": "#354050",
+      "accent": "#8ab4ff",
+      "accentSoft": "#192f4d",
+      "danger": "#ff9aab"
+    }
+  },
+  "responsive": {
+    "desktop": "two equal columns",
+    "compactBelow": 680,
+    "compact": "stack input above preview; wrap actions; preserve draft load/delete"
+  },
+  "requirements": {
+    "automaticSave": false,
+    "manualDraftSave": true,
+    "automaticSlug": true,
+    "automaticPublishDate": true,
+    "optionalSubtitle": true,
+    "thumbnail": "first image in body",
+    "preview": "updates as title, subtitle, category and body change",
+    "draftDelete": "visible action per saved draft with one confirmation",
+    "currentDraftDelete": "reset both input and preview only after confirmation",
+    "deleteOtherDraft": "preserve current input",
+    "unsavedNavigation": "confirm before switching or creating a post"
+  },
+  "variants": [
+    {
+      "id": "rich-top",
+      "name": "서식 편집형",
+      "editorKind": "rich",
+      "actionsPosition": "top",
+      "frame": {
+        "width": 1440,
+        "height": 960
+      },
+      "layout": {
+        "columns": [
+          {
+            "width": 720,
+            "role": "input"
+          },
+          {
+            "width": 720,
+            "role": "rendered-result"
+          }
+        ],
+        "divider": {
+          "x": 720,
+          "width": 1
+        },
+        "headerHeight": 64,
+        "footerHeight": 64
+      },
+      "nodes": [
+        {
+          "id": "rich-top-surface",
+          "type": "frame",
+          "x": 0,
+          "y": 0,
+          "width": 1440,
+          "height": 960,
+          "fill": "surface"
+        },
+        {
+          "id": "rich-top-header",
+          "type": "frame",
+          "x": 0,
+          "y": 0,
+          "width": 1440,
+          "height": 64,
+          "fill": "surface",
+          "borderBottom": "line",
+          "children": [
+            {
+              "id": "brand",
+              "type": "text",
+              "text": "JunHo Tech Blog",
+              "x": 24,
+              "y": 20,
+              "width": 200,
+              "height": 24,
+              "font": {
+                "family": "Pretendard Variable",
+                "size": 18,
+                "weight": 500
+              },
+              "color": "text"
+            },
+            {
+              "id": "draft-list",
+              "type": "button",
+              "label": "임시글 3",
+              "x": 256,
+              "y": 12,
+              "width": 104,
+              "height": 40,
+              "emphasis": "secondary",
+              "radius": 8
+            },
+            {
+              "id": "new-post",
+              "type": "button",
+              "label": "새 글",
+              "x": 368,
+              "y": 12,
+              "width": 86,
+              "height": 40,
+              "emphasis": "secondary",
+              "radius": 8
+            },
+            {
+              "id": "save",
+              "type": "button",
+              "label": "임시저장",
+              "x": 1180,
+              "y": 12,
+              "width": 112,
+              "height": 40,
+              "emphasis": "secondary",
+              "radius": 8
+            },
+            {
+              "id": "publish",
+              "type": "button",
+              "label": "발행",
+              "x": 1304,
+              "y": 12,
+              "width": 112,
+              "height": 40,
+              "emphasis": "primary",
+              "radius": 8
+            }
+          ]
+        },
+        {
+          "id": "rich-top-input",
+          "type": "frame",
+          "x": 0,
+          "y": 64,
+          "width": 720,
+          "height": 832,
+          "fill": "surface",
+          "padding": 48,
+          "borderRight": "line",
+          "children": [
+            {
+              "id": "input-label",
+              "type": "text",
+              "text": "서식 편집",
+              "x": 48,
+              "y": 88,
+              "width": 160,
+              "height": 20,
+              "font": {
+                "family": "Pretendard Variable",
+                "size": 12,
+                "weight": 500
+              },
+              "color": "muted"
+            },
+            {
+              "id": "category-input",
+              "type": "input",
+              "value": "React",
+              "placeholder": "카테고리",
+              "x": 48,
+              "y": 132,
+              "width": 120,
+              "height": 30,
+              "font": {
+                "family": "Pretendard Variable",
+                "size": 13,
+                "weight": 500
+              }
+            },
+            {
+              "id": "title-input",
+              "type": "textarea",
+              "value": "렌더링을 이해하면\n컴포넌트가 달라진다",
+              "placeholder": "제목을 입력하세요",
+              "x": 48,
+              "y": 180,
+              "width": 624,
+              "height": 108,
+              "font": {
+                "family": "Pretendard Variable",
+                "size": 38,
+                "weight": 700,
+                "lineHeight": 1.4
+              }
+            },
+            {
+              "id": "subtitle-input",
+              "type": "input",
+              "value": "React가 화면을 그리는 과정을 살펴봅니다.",
+              "placeholder": "부제목을 입력하세요 (선택)",
+              "x": 48,
+              "y": 310,
+              "width": 624,
+              "height": 36,
+              "font": {
+                "family": "Pretendard Variable",
+                "size": 18,
+                "weight": 400
+              }
+            },
+            {
+              "id": "toolbar",
+              "type": "toolbar",
+              "x": 48,
+              "y": 378,
+              "width": 624,
+              "height": 44,
+              "actions": [
+                "heading-2",
+                "bold",
+                "italic",
+                "list",
+                "quote",
+                "code",
+                "image",
+                "undo",
+                "redo"
+              ]
+            },
+            {
+              "id": "body-input",
+              "type": "rich-text",
+              "value": "## 렌더링은 화면을 계산하는 일\n\nReact는 컴포넌트를 호출해 다음 화면에 필요한 결과를 계산합니다.\n화면에 반영하는 **커밋**과는 구분해서 생각합니다.\n\n```tsx\nconst [count, setCount] = useState(0);\n```",
+              "x": 48,
+              "y": 450,
+              "width": 624,
+              "height": 390,
+              "font": {
+                "family": "Pretendard Variable",
+                "size": 17,
+                "weight": 400,
+                "lineHeight": 1.9
+              }
+            }
+          ]
+        },
+        {
+          "id": "rich-top-preview",
+          "type": "frame",
+          "x": 721,
+          "y": 64,
+          "width": 719,
+          "height": 832,
+          "fill": "preview",
+          "padding": 48,
+          "children": [
+            {
+              "id": "preview-label",
+              "type": "text",
+              "text": "실시간 미리보기",
+              "x": 769,
+              "y": 88,
+              "width": 220,
+              "height": 20,
+              "font": {
+                "family": "Pretendard Variable",
+                "size": 12,
+                "weight": 500
+              },
+              "color": "muted"
+            },
+            {
+              "id": "preview-category",
+              "type": "text",
+              "text": "React",
+              "x": 769,
+              "y": 144,
+              "width": 100,
+              "height": 24,
+              "font": {
+                "family": "Pretendard Variable",
+                "size": 13,
+                "weight": 500
+              },
+              "color": "accent"
+            },
+            {
+              "id": "preview-title",
+              "type": "text",
+              "text": "렌더링을 이해하면\n컴포넌트가 달라진다",
+              "x": 769,
+              "y": 196,
+              "width": 623,
+              "height": 108,
+              "font": {
+                "family": "Pretendard Variable",
+                "size": 38,
+                "weight": 700
+              },
+              "color": "text"
+            },
+            {
+              "id": "preview-subtitle",
+              "type": "text",
+              "text": "React가 화면을 그리는 과정을 살펴봅니다.",
+              "x": 769,
+              "y": 326,
+              "width": 623,
+              "height": 48,
+              "font": {
+                "family": "Pretendard Variable",
+                "size": 18,
+                "weight": 400
+              },
+              "color": "muted"
+            },
+            {
+              "id": "preview-meta",
+              "type": "text",
+              "text": "Nov 17, 2026  |  1 min read",
+              "x": 769,
+              "y": 404,
+              "width": 623,
+              "height": 22,
+              "font": {
+                "family": "Pretendard Variable",
+                "size": 12,
+                "weight": 400
+              },
+              "color": "muted"
+            },
+            {
+              "id": "rendered-body",
+              "type": "rich-text",
+              "source": "body-input",
+              "value": "## 렌더링은 화면을 계산하는 일\n\nReact는 컴포넌트를 호출해 다음 화면에 필요한 결과를 계산합니다.\n화면에 반영하는 **커밋**과는 구분해서 생각합니다.\n\n```tsx\nconst [count, setCount] = useState(0);\n```",
+              "x": 769,
+              "y": 458,
+              "width": 623,
+              "height": 360,
+              "font": {
+                "family": "Pretendard Variable",
+                "size": 17,
+                "weight": 400,
+                "lineHeight": 1.9
+              }
+            }
+          ]
+        },
+        {
+          "id": "rich-top-footer",
+          "type": "frame",
+          "x": 0,
+          "y": 896,
+          "width": 1440,
+          "height": 64,
+          "fill": "surface",
+          "borderTop": "line",
+          "children": [
+            {
+              "id": "save-status",
+              "type": "text",
+              "text": "임시저장됨",
+              "x": 24,
+              "y": 918,
+              "width": 250,
+              "height": 20,
+              "font": {
+                "family": "Pretendard Variable",
+                "size": 12,
+                "weight": 400
+              },
+              "color": "muted"
+            },
+            {
+              "id": "character-count",
+              "type": "text",
+              "text": "248자",
+              "x": 1308,
+              "y": 918,
+              "width": 108,
+              "height": 20,
+              "font": {
+                "family": "Pretendard Variable",
+                "size": 12,
+                "weight": 400
+              },
+              "color": "muted"
+            }
+          ]
+        }
+      ],
+      "overlays": {
+        "drafts": {
+          "trigger": "draft-list",
+          "type": "popover",
+          "x": 240,
+          "y": 60,
+          "width": 400,
+          "fill": "surface",
+          "radius": 12,
+          "header": "임시글",
+          "rows": [
+            {
+              "id": "react-render",
+              "title": "렌더링을 이해하면 컴포넌트가 달라진다",
+              "updatedAt": "2026-11-17T10:24:00+09:00",
+              "actions": [
+                "load",
+                "delete"
+              ]
+            },
+            {
+              "id": "react-state",
+              "title": "상태는 어디에 두어야 할까",
+              "updatedAt": "2026-11-16T21:10:00+09:00",
+              "actions": [
+                "load",
+                "delete"
+              ]
+            },
+            {
+              "id": "next-static",
+              "title": "정적 배포를 선택한 이유",
+              "updatedAt": "2026-11-15T14:32:00+09:00",
+              "actions": [
+                "load",
+                "delete"
+              ]
+            }
+          ],
+          "emptyState": "저장한 임시글이 없습니다."
+        },
+        "deleteConfirmation": {
+          "type": "alertdialog",
+          "width": 380,
+          "title": "임시글을 삭제할까요?",
+          "description": "이 임시글은 다시 불러올 수 없습니다.",
+          "actions": [
+            "취소",
+            "삭제"
+          ],
+          "destructiveAction": "삭제"
+        },
+        "discardConfirmation": {
+          "type": "alertdialog",
+          "width": 380,
+          "title": "저장하지 않은 변경이 있어요",
+          "description": "다른 글을 열면 현재 변경은 사라집니다.",
+          "actions": [
+            "계속 작성",
+            "저장하지 않고 이동"
+          ]
+        }
+      }
+    },
+    {
+      "id": "markdown-bottom",
+      "name": "마크다운 편집형",
+      "editorKind": "markdown",
+      "actionsPosition": "bottom",
+      "frame": {
+        "width": 1440,
+        "height": 960
+      },
+      "layout": {
+        "columns": [
+          {
+            "width": 720,
+            "role": "input"
+          },
+          {
+            "width": 720,
+            "role": "rendered-result"
+          }
+        ],
+        "divider": {
+          "x": 720,
+          "width": 1
+        },
+        "headerHeight": 64,
+        "footerHeight": 64
+      },
+      "nodes": [
+        {
+          "id": "markdown-bottom-surface",
+          "type": "frame",
+          "x": 0,
+          "y": 0,
+          "width": 1440,
+          "height": 960,
+          "fill": "surface"
+        },
+        {
+          "id": "markdown-bottom-header",
+          "type": "frame",
+          "x": 0,
+          "y": 0,
+          "width": 1440,
+          "height": 64,
+          "fill": "surface",
+          "borderBottom": "line",
+          "children": [
+            {
+              "id": "brand",
+              "type": "text",
+              "text": "JunHo Tech Blog",
+              "x": 24,
+              "y": 20,
+              "width": 200,
+              "height": 24,
+              "font": {
+                "family": "Pretendard Variable",
+                "size": 18,
+                "weight": 500
+              },
+              "color": "text"
+            },
+            {
+              "id": "draft-list",
+              "type": "button",
+              "label": "임시글 3",
+              "x": 256,
+              "y": 12,
+              "width": 104,
+              "height": 40,
+              "emphasis": "secondary",
+              "radius": 8
+            },
+            {
+              "id": "new-post",
+              "type": "button",
+              "label": "새 글",
+              "x": 368,
+              "y": 12,
+              "width": 86,
+              "height": 40,
+              "emphasis": "secondary",
+              "radius": 8
+            }
+          ]
+        },
+        {
+          "id": "markdown-bottom-input",
+          "type": "frame",
+          "x": 0,
+          "y": 64,
+          "width": 720,
+          "height": 832,
+          "fill": "surface",
+          "padding": 48,
+          "borderRight": "line",
+          "children": [
+            {
+              "id": "input-label",
+              "type": "text",
+              "text": "마크다운 입력",
+              "x": 48,
+              "y": 88,
+              "width": 160,
+              "height": 20,
+              "font": {
+                "family": "Pretendard Variable",
+                "size": 12,
+                "weight": 500
+              },
+              "color": "muted"
+            },
+            {
+              "id": "category-input",
+              "type": "input",
+              "value": "React",
+              "placeholder": "카테고리",
+              "x": 48,
+              "y": 132,
+              "width": 120,
+              "height": 30,
+              "font": {
+                "family": "Pretendard Variable",
+                "size": 13,
+                "weight": 500
+              }
+            },
+            {
+              "id": "title-input",
+              "type": "textarea",
+              "value": "렌더링을 이해하면\n컴포넌트가 달라진다",
+              "placeholder": "제목을 입력하세요",
+              "x": 48,
+              "y": 180,
+              "width": 624,
+              "height": 108,
+              "font": {
+                "family": "Pretendard Variable",
+                "size": 38,
+                "weight": 700,
+                "lineHeight": 1.4
+              }
+            },
+            {
+              "id": "subtitle-input",
+              "type": "input",
+              "value": "React가 화면을 그리는 과정을 살펴봅니다.",
+              "placeholder": "부제목을 입력하세요 (선택)",
+              "x": 48,
+              "y": 310,
+              "width": 624,
+              "height": 36,
+              "font": {
+                "family": "Pretendard Variable",
+                "size": 18,
+                "weight": 400
+              }
+            },
+            {
+              "id": "toolbar",
+              "type": "toolbar",
+              "x": 48,
+              "y": 378,
+              "width": 624,
+              "height": 44,
+              "actions": [
+                "heading-2",
+                "bold",
+                "italic",
+                "list",
+                "quote",
+                "code",
+                "image",
+                "undo",
+                "redo"
+              ]
+            },
+            {
+              "id": "body-input",
+              "type": "textarea",
+              "value": "## 렌더링은 화면을 계산하는 일\n\nReact는 컴포넌트를 호출해 다음 화면에 필요한 결과를 계산합니다.\n화면에 반영하는 **커밋**과는 구분해서 생각합니다.\n\n```tsx\nconst [count, setCount] = useState(0);\n```",
+              "x": 48,
+              "y": 450,
+              "width": 624,
+              "height": 390,
+              "font": {
+                "family": "SFMono-Regular, Consolas, monospace",
+                "size": 15,
+                "weight": 400,
+                "lineHeight": 1.9
+              }
+            }
+          ]
+        },
+        {
+          "id": "markdown-bottom-preview",
+          "type": "frame",
+          "x": 721,
+          "y": 64,
+          "width": 719,
+          "height": 832,
+          "fill": "preview",
+          "padding": 48,
+          "children": [
+            {
+              "id": "preview-label",
+              "type": "text",
+              "text": "실시간 미리보기",
+              "x": 769,
+              "y": 88,
+              "width": 220,
+              "height": 20,
+              "font": {
+                "family": "Pretendard Variable",
+                "size": 12,
+                "weight": 500
+              },
+              "color": "muted"
+            },
+            {
+              "id": "preview-category",
+              "type": "text",
+              "text": "React",
+              "x": 769,
+              "y": 144,
+              "width": 100,
+              "height": 24,
+              "font": {
+                "family": "Pretendard Variable",
+                "size": 13,
+                "weight": 500
+              },
+              "color": "accent"
+            },
+            {
+              "id": "preview-title",
+              "type": "text",
+              "text": "렌더링을 이해하면\n컴포넌트가 달라진다",
+              "x": 769,
+              "y": 196,
+              "width": 623,
+              "height": 108,
+              "font": {
+                "family": "Pretendard Variable",
+                "size": 38,
+                "weight": 700
+              },
+              "color": "text"
+            },
+            {
+              "id": "preview-subtitle",
+              "type": "text",
+              "text": "React가 화면을 그리는 과정을 살펴봅니다.",
+              "x": 769,
+              "y": 326,
+              "width": 623,
+              "height": 48,
+              "font": {
+                "family": "Pretendard Variable",
+                "size": 18,
+                "weight": 400
+              },
+              "color": "muted"
+            },
+            {
+              "id": "preview-meta",
+              "type": "text",
+              "text": "Nov 17, 2026  |  1 min read",
+              "x": 769,
+              "y": 404,
+              "width": 623,
+              "height": 22,
+              "font": {
+                "family": "Pretendard Variable",
+                "size": 12,
+                "weight": 400
+              },
+              "color": "muted"
+            },
+            {
+              "id": "rendered-body",
+              "type": "rich-text",
+              "source": "body-input",
+              "value": "## 렌더링은 화면을 계산하는 일\n\nReact는 컴포넌트를 호출해 다음 화면에 필요한 결과를 계산합니다.\n화면에 반영하는 **커밋**과는 구분해서 생각합니다.\n\n```tsx\nconst [count, setCount] = useState(0);\n```",
+              "x": 769,
+              "y": 458,
+              "width": 623,
+              "height": 360,
+              "font": {
+                "family": "Pretendard Variable",
+                "size": 17,
+                "weight": 400,
+                "lineHeight": 1.9
+              }
+            }
+          ]
+        },
+        {
+          "id": "markdown-bottom-footer",
+          "type": "frame",
+          "x": 0,
+          "y": 896,
+          "width": 1440,
+          "height": 64,
+          "fill": "surface",
+          "borderTop": "line",
+          "children": [
+            {
+              "id": "save-status",
+              "type": "text",
+              "text": "임시저장됨",
+              "x": 140,
+              "y": 918,
+              "width": 250,
+              "height": 20,
+              "font": {
+                "family": "Pretendard Variable",
+                "size": 12,
+                "weight": 400
+              },
+              "color": "muted"
+            },
+            {
+              "id": "leave",
+              "type": "button",
+              "label": "나가기",
+              "x": 24,
+              "y": 908,
+              "width": 92,
+              "height": 40,
+              "emphasis": "secondary",
+              "radius": 8
+            },
+            {
+              "id": "save",
+              "type": "button",
+              "label": "임시저장",
+              "x": 1180,
+              "y": 908,
+              "width": 112,
+              "height": 40,
+              "emphasis": "secondary",
+              "radius": 8
+            },
+            {
+              "id": "publish",
+              "type": "button",
+              "label": "발행",
+              "x": 1304,
+              "y": 908,
+              "width": 112,
+              "height": 40,
+              "emphasis": "primary",
+              "radius": 8
+            }
+          ]
+        }
+      ],
+      "overlays": {
+        "drafts": {
+          "trigger": "draft-list",
+          "type": "popover",
+          "x": 240,
+          "y": 60,
+          "width": 400,
+          "fill": "surface",
+          "radius": 12,
+          "header": "임시글",
+          "rows": [
+            {
+              "id": "react-render",
+              "title": "렌더링을 이해하면 컴포넌트가 달라진다",
+              "updatedAt": "2026-11-17T10:24:00+09:00",
+              "actions": [
+                "load",
+                "delete"
+              ]
+            },
+            {
+              "id": "react-state",
+              "title": "상태는 어디에 두어야 할까",
+              "updatedAt": "2026-11-16T21:10:00+09:00",
+              "actions": [
+                "load",
+                "delete"
+              ]
+            },
+            {
+              "id": "next-static",
+              "title": "정적 배포를 선택한 이유",
+              "updatedAt": "2026-11-15T14:32:00+09:00",
+              "actions": [
+                "load",
+                "delete"
+              ]
+            }
+          ],
+          "emptyState": "저장한 임시글이 없습니다."
+        },
+        "deleteConfirmation": {
+          "type": "alertdialog",
+          "width": 380,
+          "title": "임시글을 삭제할까요?",
+          "description": "이 임시글은 다시 불러올 수 없습니다.",
+          "actions": [
+            "취소",
+            "삭제"
+          ],
+          "destructiveAction": "삭제"
+        },
+        "discardConfirmation": {
+          "type": "alertdialog",
+          "width": 380,
+          "title": "저장하지 않은 변경이 있어요",
+          "description": "다른 글을 열면 현재 변경은 사라집니다.",
+          "actions": [
+            "계속 작성",
+            "저장하지 않고 이동"
+          ]
+        }
+      }
+    }
+  ],
+  "references": [
+    {
+      "url": "https://github.com/velopert/velog-client/blob/master/src/components/write/EditorPanes.tsx",
+      "basis": "equal input and preview panes"
+    },
+    {
+      "url": "https://github.com/velopert/velog-client/blob/master/src/components/write/WriteFooter.tsx",
+      "basis": "manual save and publish action placement"
+    },
+    {
+      "url": "https://github.com/velopert/velog-client/blob/master/src/components/saves/SavedPosts.tsx",
+      "basis": "draft list and delete confirmation"
+    }
+  ],
+  "figma": {
+    "applied": false,
+    "fontAvailability": "not-checked"
+  }
+}
