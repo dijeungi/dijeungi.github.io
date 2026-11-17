@@ -191,9 +191,9 @@
 .heading h1 {
   width: 100%;
   margin: 0;
-  font-size: 28px;
+  font-size: 36px;
   font-weight: 700;
-  line-height: 38px;
+  line-height: 44px;
   letter-spacing: -0.035em;
   text-wrap: balance;
 }
@@ -212,7 +212,7 @@
   width: 100%;
   margin: 12px 0 0;
   color: var(--theme-text-secondary, #687487);
-  font-size: 18px;
+  font-size: 20px;
   font-weight: 400;
   line-height: 28px;
 }
@@ -394,12 +394,20 @@
     --page-columns: 12;
     --page-gap: 16px;
   }
+  .heading h1 {
+    font-size: 48px;
+    line-height: 56px;
+  }
 }
 @media (min-width: 1025px) {
   .reader {
     --page-gap: 24px;
     --body-column: 4 / span 6;
     --heading-column: 3 / span 8;
+  }
+  .heading h1 {
+    font-size: 60px;
+    line-height: 72px;
   }
   .brand,
   .currentTitle {
