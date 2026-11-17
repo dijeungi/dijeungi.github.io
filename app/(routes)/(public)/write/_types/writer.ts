@@ -3,7 +3,7 @@ import type { BlogDocument, RichDocument } from "@/app/shared/types/content";
 
 export type WriterConnection = "loading" | "ready" | "unavailable";
 
-export type WriterIconName = "bold" | "italic" | "strike" | "link" | "bullets" | "numbers" | "code" | "image" | "undo" | "redo" | "back" | "check" | "plus";
+export type WriterIconName = "bold" | "italic" | "strike" | "link" | "bullets" | "numbers" | "code" | "image" | "undo" | "redo" | "back" | "check" | "plus" | "edit";
 
 export type DraftSummary = Pick<BlogDocument, "id" | "title" | "slug" | "updatedAt"> & { isLocalDraft?: boolean; isPublished?: boolean };
 

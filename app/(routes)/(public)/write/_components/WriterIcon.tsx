@@ -15,6 +15,7 @@ const paths: Record<WriterIconName, string> = {
   back: "M20 12H4m6-6-6 6 6 6",
   check: "m5 12 4 4L19 6",
   plus: "M12 4v16M4 12h16",
+  edit: "M16 3l5 5L9 20l-6 1 1-6L16 3zM14 5l5 5",
 };
 
 // 글쓰기 도구의 선형 아이콘
