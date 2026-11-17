@@ -729,6 +729,19 @@ test("수동 저장한 원문은 문법과 줄바꿈을 바꾸지 않고 다시 
   assert.equal(reloaded.value.dirty, false);
 });
 
+test("기존에 공백으로 변환된 본문도 저장한 마크다운의 줄바꿈으로 미리보기를 복원한다", async (context) => {
+  const initial = draft({
+    markdown: "첫 줄\n둘째 줄",
+    content: { type: "doc", content: [{ type: "paragraph", content: [{ type: "text", text: "첫 줄 둘째 줄" }] }] },
+  });
+  const fixture = await writerFixture(context, { initial });
+  assert.equal(fixture.value.markdown, initial.markdown);
+  assert.deepEqual(jsonValue(fixture.value.draft.content), jsonValue(parseBlogDocument(draft({ content: parseMarkdown(initial.markdown) })).content));
+  assert.equal(fixture.value.dirty, false);
+  assert.deepEqual(fixture.documents.get(initial.id), initial);
+  assert.equal(fixture.requests.some((request) => request.method !== "GET"), false);
+});
+
 test("저장 중 새 편집이 없으면 서버가 정규화한 제목과 카테고리를 반영하고 저장 완료로 표시한다", async (context) => {
   const fixture = await writerFixture(context);
   const source = "**원문은 공백까지 유지합니다.**\n\n";

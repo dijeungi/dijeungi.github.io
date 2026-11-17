@@ -85,6 +85,7 @@ const parser = new MarkdownParser(documentSchema(true), tokenizer, {
   code_block: { block: "codeBlock", noCloseToken: true },
   fence: { block: "codeBlock", getAttrs: token => ({ language: token.info.trim().split(/\s+/)[0] || null }), noCloseToken: true },
   hr: { node: "horizontalRule" },
+  softbreak: { node: "hardBreak" },
   hardbreak: { node: "hardBreak" },
   em: { mark: "italic" },
   strong: { mark: "bold" },
@@ -178,7 +179,12 @@ function normalizeBlocks(node: RichNode, images: ReturnType<typeof imageMetadata
     let inline: RichNode[] = [];
     // 이미지 양쪽에 남은 실제 문단 내용 반영
     function flush() {
-      if (inline.some(child => child.type !== "text" || child.text?.trim())) blocks.push({ ...node, content: inline });
+      let start = 0;
+      let end = inline.length;
+      while (inline[start]?.type === "hardBreak") start += 1;
+      while (end > start && inline[end - 1]?.type === "hardBreak") end -= 1;
+      const content = inline.slice(start, end);
+      if (content.some(child => child.type !== "text" || child.text?.trim())) blocks.push({ ...node, content });
       inline = [];
     }
     for (const child of node.content) {

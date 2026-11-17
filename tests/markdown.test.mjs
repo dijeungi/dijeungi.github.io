@@ -113,6 +113,28 @@ test("명시한 줄바꿈과 수평선을 왕복 변환한다", () => {
   assert.equal(text(result), text(content));
 });
 
+test("Enter 한 번의 줄바꿈과 빈 줄의 문단 구분을 저장하고 복원한다", () => {
+  const content = checked(parseMarkdown("첫 줄\r\n**둘째 줄**\n셋째 줄\n\n다음 문단"));
+  assert.equal(content.content.length, 2);
+  assert.equal(nodes(content, "hardBreak").length, 2);
+  assert.deepEqual(content.content[0].content.map((node) => node.type), ["text", "hardBreak", "text", "hardBreak", "text"]);
+  assert.ok(nodes(content, "text").find((node) => node.text === "둘째 줄").marks.some((mark) => mark.type === "bold"));
+  const source = serializeMarkdown(content);
+  const result = checked(parseMarkdown(source));
+  assert.deepEqual(result, content);
+  assert.equal(serializeMarkdown(result), source);
+});
+
+test("목록과 인용문 안의 줄바꿈을 유지하고 코드 내부 줄바꿈은 바꾸지 않는다", () => {
+  const content = checked(parseMarkdown("- 첫 줄\n  다음 줄\n- 다음 항목\n\n> 인용 첫 줄\n> 인용 다음 줄\n\n```js\nconst a = 1;\nconst b = 2;\n```"));
+  assert.equal(nodes(content, "listItem").length, 2);
+  assert.equal(nodes(content, "hardBreak").length, 2);
+  assert.equal(nodes(nodes(content, "listItem")[0], "hardBreak").length, 1);
+  assert.equal(nodes(nodes(content, "blockquote")[0], "hardBreak").length, 1);
+  assert.equal(nodes(content, "codeBlock")[0].content[0].text, "const a = 1;\nconst b = 2;");
+  assert.deepEqual(checked(parseMarkdown(serializeMarkdown(content))), content);
+});
+
 test("괄호와 Unicode 쿼리가 있는 링크를 유지하고 위험 링크를 실행 링크로 만들지 않는다", () => {
   const content = checked(parseMarkdown("[주소](https://example.com/a_(b)?q=한글&x=1)"));
   const href = nodes(content, "text")[0].marks.find((mark) => mark.type === "link").attrs.href;
@@ -133,6 +155,25 @@ test("문단 안의 이미지를 블록으로 분리하고 실제 이전 이미�
   const fresh = checked(parseMarkdown("![새 이미지](/uploads/new.png)", previous));
   assert.equal(Object.hasOwn(nodes(fresh, "image")[0].attrs, "width"), false);
   assert.equal(Object.hasOwn(nodes(fresh, "image")[0].attrs, "height"), false);
+});
+
+test("이미지 앞뒤 Enter는 블록 경계로 처리하고 텍스트 내부 줄바꿈만 유지한다", () => {
+  const cases = [
+    { source: "앞\n![사진](/uploads/one.png)\n뒤", breaks: 0, images: 1 },
+    { source: "![첫째](/uploads/one.png)\n![둘째](/uploads/two.png)", breaks: 0, images: 2 },
+    { source: "앞\n한 줄\n![사진](/uploads/one.png)\n뒤\n또 한 줄", breaks: 2, images: 1 },
+    { source: "- 앞\n  ![사진](/uploads/one.png)\n  뒤", breaks: 0, images: 1 },
+  ];
+  for (const entry of cases) {
+    const content = checked(parseMarkdown(entry.source));
+    assert.equal(nodes(content, "image").length, entry.images);
+    assert.equal(nodes(content, "hardBreak").length, entry.breaks);
+    assert.ok(nodes(content, "paragraph").every((node) => node.content.length > 0));
+    const source = serializeMarkdown(content);
+    const result = checked(parseMarkdown(source));
+    assert.deepEqual(result, content);
+    assert.equal(serializeMarkdown(result), source);
+  }
 });
 
 test("이미지 설명과 일반 본문의 이스케이프 및 엔티티와 코드 문자를 빠뜨리지 않는다", () => {

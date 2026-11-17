@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useWriterDialog } from "./useWriterDialog";
 import { useMarkdownInput } from "./useMarkdownInput";
+import { parseMarkdown } from "@/app/shared/lib/markdown";
 import { createEmptyDocument, parseBlogDocument, validatePostSubtitle, normalizeDraftMetadata } from "@/app/shared/lib/content";
 
 import type { BlogDocument, RichDocument } from "@/app/shared/types/content";
@@ -155,7 +156,10 @@ export function usePostWriter() {
   // 화면과 입력창에 같은 글 표시
   const displayDraft = useCallback((next: BlogDocument, saved = false, editing = false) => {
     if (!mountedRef.current) return;
-    const normalized = normalizeDraftMetadata({ ...next, subtitle: next.subtitle ?? "", readingMinutes: 0 });
+    const restored = next.markdown === undefined
+      ? next
+      : parseBlogDocument({ ...next, content: parseMarkdown(next.markdown, next.content) });
+    const normalized = normalizeDraftMetadata({ ...restored, subtitle: restored.subtitle ?? "", readingMinutes: 0 });
     setDocument(normalized);
     savedRef.current = draftFingerprint(normalized);
     storeDraft(normalized);
