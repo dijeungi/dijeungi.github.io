@@ -2,6 +2,8 @@ import { notFound } from "next/navigation";
 
 import { ArticleReader } from "./_components/ArticleReader";
 import { WriteButton } from "../../write/_components/WriteButton";
+import { siteName, siteUrl } from "@/app/shared/constants/site";
+import { getFirstContentImage } from "@/app/shared/lib/content";
 import { getAllPosts, getPostBySlug } from "@/app/shared/data/published-posts";
 
 import type { Metadata } from "next";
@@ -15,7 +17,7 @@ export async function generateStaticParams() {
   return posts.map((post) => ({ slug: post.slug }));
 }
 
-// 게시글별 검색 메타데이터 생성
+// 게시글별 검색 및 링크 공유 메타데이터 생성
 export async function generateMetadata({
   params,
 }: {
@@ -28,17 +30,31 @@ export async function generateMetadata({
     notFound();
   }
 
+  const description = post.subtitle || post.description;
+  const image = post.heroImage ?? getFirstContentImage(post.document);
+  const url = new URL("/posts/" + encodeURIComponent(post.slug) + "/", siteUrl).href;
+
   return {
     title: post.title,
-    description: post.description,
+    description,
+    alternates: { canonical: url },
     openGraph: {
       type: "article",
+      locale: "ko_KR",
+      siteName,
       title: post.title,
-      description: post.description,
+      description,
+      url,
       publishedTime: post.date,
+      images: image ? [{
+        url: new URL(image.src, siteUrl).href,
+        alt: image.alt || post.title,
+        width: image.width,
+        height: image.height,
+      }] : undefined,
     },
     other: {
-      "giscus:backlink": "https://dijeungi.github.io/posts/" + encodeURIComponent(post.slug) + "/",
+      "giscus:backlink": url,
     },
   };
 }
