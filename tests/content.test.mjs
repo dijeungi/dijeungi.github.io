@@ -6,7 +6,6 @@ import { Image } from "@tiptap/extension-image";
 
 import {
   toArticlePost,
-  slugifyTitle,
   parseBlogDocument,
   isSafeContentUrl,
   createEmptyDocument,
@@ -67,8 +66,14 @@ test("임시저장과 기존 글 읽기는 부제목을 비울 수 있고 새 �
   assert.equal(parseBlogDocument(document(), { publish: true }).subtitle, undefined);
 });
 
-test("한글 제목에서 경로 구분자 없는 글 주소를 만든다", () => {
-  assert.equal(slugifyTitle("  React 렌더링을 이해하면!  "), "react-렌더링을-이해하면");
+test("초안 메타데이터는 제목에서 주소를 만들지 않고 확정된 숫자 주소를 보존한다", () => {
+  const draft = parseBlogDocument(document({ slug: "", title: "React 19 첫 번째 글" }));
+  assert.equal(normalizeDraftMetadata(draft).slug, "");
+  assert.equal(normalizeDraftMetadata({ ...draft, title: "완전히 다른 제목" }).slug, "");
+  assert.equal(normalizeDraftMetadata({ ...draft, slug: "1", title: "수정한 제목" }).slug, "1");
+});
+
+test("주소와 문서 식별자에 파일 경로를 허용하지 않는다", () => {
   assert.throws(() => parseBlogDocument(document({ slug: "../../README" })));
   assert.throws(() => parseBlogDocument(document({ id: "../other" })));
 });
@@ -76,8 +81,8 @@ test("한글 제목에서 경로 구분자 없는 글 주소를 만든다", () =
 test("주소의 대소문자와 Unicode를 통일하고 파일 이름 길이를 제한한다", () => {
   assert.equal(parseBlogDocument(document({ slug: "ＦＩＲＳＴ-POST" })).slug, "first-post");
   assert.equal(parseBlogDocument(document({ slug: "한글".normalize("NFD") })).slug, "한글");
-  const slug = slugifyTitle("가".repeat(100));
-  assert(new TextEncoder().encode(slug).length <= 180);
+  assert.equal(parseBlogDocument(document({ slug: "a".repeat(60) })).slug, "a".repeat(60));
+  assert.equal(parseBlogDocument(document({ slug: "2" })).slug, "2");
   assert.throws(() => parseBlogDocument(document({ slug: "가".repeat(61) })));
 });
 

@@ -4,6 +4,7 @@ import { ArticleReader } from "./_components/ArticleReader";
 import { WriteButton } from "../../write/_components/WriteButton";
 import { siteName, siteUrl } from "@/app/shared/constants/site";
 import { getFirstContentImage } from "@/app/shared/lib/content";
+import { postPath, postSlugMigrations } from "@/app/shared/lib/post-urls";
 import { getAllPosts, getPostBySlug } from "@/app/shared/data/published-posts";
 
 import type { Metadata } from "next";
@@ -13,8 +14,13 @@ export const dynamicParams = false;
 // 정적 게시글 주소 목록 생성
 export async function generateStaticParams() {
   const posts = await getAllPosts();
+  const slugs = new Set(posts.map((post) => post.slug));
 
-  return posts.map((post) => ({ slug: post.slug }));
+  for (const { previous, current } of postSlugMigrations) {
+    if (slugs.has(current)) slugs.add(previous);
+  }
+
+  return Array.from(slugs, (slug) => ({ slug }));
 }
 
 // 게시글별 검색 및 링크 공유 메타데이터 생성
@@ -32,7 +38,7 @@ export async function generateMetadata({
 
   const description = post.subtitle || post.description;
   const image = post.heroImage ?? getFirstContentImage(post.document);
-  const url = new URL("/posts/" + encodeURIComponent(post.slug) + "/", siteUrl).href;
+  const url = new URL(postPath(post.slug), siteUrl).href;
 
   return {
     title: post.title,
@@ -70,6 +76,19 @@ export default async function PostPage({
 
   if (!post) {
     notFound();
+  }
+
+  if (decodeURIComponent(slug).normalize("NFC") !== post.slug) {
+    const path = (process.env.NEXT_PUBLIC_BASE_PATH || "") + postPath(post.slug);
+
+    return (
+      <>
+        <meta httpEquiv="refresh" content={"0;url=" + path} />
+        <main id="main-content">
+          <a href={path}>새 글 주소로 이동</a>
+        </main>
+      </>
+    );
   }
 
   return (

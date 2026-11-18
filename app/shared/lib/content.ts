@@ -161,21 +161,6 @@ export function createEmptyDocument(): RichDocument {
   return { type: "doc", content: [{ type: "paragraph" }] };
 }
 
-// 제목 기반 글 주소 생성
-export function slugifyTitle(title: string): string {
-  const slug = title.normalize("NFKC").trim().toLowerCase().replace(/[^\p{L}\p{N}\s-]/gu, "").replace(/[\s-]+/gu, "-").replace(/^-|-$/g, "");
-  const encoder = new TextEncoder();
-  let bytes = 0;
-  let result = "";
-  for (const character of Array.from(slug).slice(0, MAX_SLUG_LENGTH)) {
-    const length = encoder.encode(character).length;
-    if (bytes + length > MAX_SLUG_BYTES) break;
-    bytes += length;
-    result += character;
-  }
-  return result.replace(/-$/g, "");
-}
-
 // 본문 텍스트와 이미지 유무 수집
 function collectContent(nodes: RichNode[]): { text: string; hasImage: boolean } {
   let text = "";

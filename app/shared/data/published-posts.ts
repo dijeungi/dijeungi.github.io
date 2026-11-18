@@ -1,6 +1,7 @@
 import { join } from "node:path";
 import { readdir, readFile, stat } from "node:fs/promises";
 
+import { canonicalPostSlug } from "../lib/post-urls";
 import { MAX_POST_BYTES, parseBlogDocument, toArticlePost } from "../lib/content";
 
 import type { Post } from "../types/post";
@@ -48,7 +49,7 @@ export async function getAllPosts(): Promise<Post[]> {
 export async function getPostBySlug(slug: string): Promise<Post | undefined> {
   let normalizedSlug: string;
   try {
-    normalizedSlug = decodeURIComponent(slug).normalize("NFC");
+    normalizedSlug = canonicalPostSlug(decodeURIComponent(slug));
   } catch {
     return undefined;
   }

@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useWriterDialog } from "./useWriterDialog";
 import { useMarkdownInput } from "./useMarkdownInput";
 import { parseMarkdown } from "@/app/shared/lib/markdown";
+import { canonicalPostSlug } from "@/app/shared/lib/post-urls";
 import { createEmptyDocument, parseBlogDocument, validatePostSubtitle, normalizeDraftMetadata } from "@/app/shared/lib/content";
 
 import type { BlogDocument, RichDocument } from "@/app/shared/types/content";
@@ -168,7 +169,7 @@ export function usePostWriter() {
     setPendingCommit("");
     setLastSavedAt(saved ? next.updatedAt : "");
     const url = new URL(window.location.href);
-    if (editing && next.slug) url.searchParams.set("post", next.slug);
+    if (editing && next.slug) url.searchParams.set("post", canonicalPostSlug(next.slug));
     else url.searchParams.delete("post");
     url.searchParams.set("draft", next.id);
     window.history.replaceState(null, "", url);
@@ -188,8 +189,10 @@ export function usePostWriter() {
         if (!draftRef.current) {
           const parameters = new URL(window.location.href).searchParams;
           const requestedId = parameters.get("draft");
-          const requestedSlug = parameters.get("post");
-          const requestedPost = requestedSlug ? list.drafts.find((item) => item.slug === requestedSlug) : undefined;
+          const requestedSlug = canonicalPostSlug(parameters.get("post") ?? "");
+          const requestedPost = requestedSlug ? list.drafts.find((item) => (
+            item.slug === requestedSlug || (item.isPublished && canonicalPostSlug(item.slug) === requestedSlug)
+          )) : undefined;
           if (requestedSlug && !requestedPost) throw new WriterRequestError("수정할 게시글을 찾지 못했습니다. 글 주소를 확인해 주세요.");
           let storedId: string | null = null;
           try { storedId = localStorage.getItem(lastDraftKey); } catch {}

@@ -13,6 +13,7 @@ import {
   normalizeDraftMetadata,
 } from "../app/shared/lib/content.ts";
 import { parseMarkdown, serializeMarkdown } from "../app/shared/lib/markdown.ts";
+import { canonicalPostSlug, postSlugMigrations } from "../app/shared/lib/post-urls.ts";
 import { getMarkdownEdit, getMarkdownImageEdit } from "../app/(routes)/(public)/write/_lib/markdown-edits.ts";
 
 const { transpileModule, ModuleKind, ScriptTarget } = createRequire(import.meta.url)("typescript");
@@ -26,7 +27,7 @@ function draft(overrides = {}) {
   return {
     version: 1,
     id: randomUUID(),
-    slug: "saved-post",
+    slug: "",
     title: "저장한 글",
     subtitle: "이전 부제",
     description: "이전 검색 설명",
@@ -54,6 +55,12 @@ function response(value, status = 200) {
 // JSON 저장 경계의 필드와 값만 비교
 function jsonValue(value) {
   return JSON.parse(JSON.stringify(value));
+}
+
+// 첫 발행에서 서버가 확정한 숫자 주소 응답 구성
+function publicationResult(document, commit = "mock-commit") {
+  const draft = { ...document, slug: document.slug || "2" };
+  return { draft, slug: draft.slug, url: "/posts/" + draft.slug + "/", commit, pushed: true };
 }
 
 // 실제 마크다운 훅과 확인창을 메모리 API 및 최소 DOM으로 실행
@@ -201,7 +208,7 @@ async function writerFixture(context, {
       return response({ drafts: summaries });
     }
     if (path === "/drafts" && method === "POST") {
-      const saved = jsonValue(parseBlogDocument({ ...body, slug: body.slug || "server-post", updatedAt: new Date(Date.UTC(2026, 10, 17, 0, 0, ++sequence)).toISOString() }));
+      const saved = jsonValue(parseBlogDocument({ ...body, slug: published.get(body.id)?.slug || "", updatedAt: new Date(Date.UTC(2026, 10, 17, 0, 0, ++sequence)).toISOString() }));
       documents.set(saved.id, structuredClone(saved));
       return response({ draft: saved });
     }
@@ -254,6 +261,7 @@ async function writerFixture(context, {
     "next/navigation": { useRouter: () => router },
     "@/app/shared/lib/content": { isSafeContentUrl, parseBlogDocument, createEmptyDocument, validatePostSubtitle, normalizeDraftMetadata },
     "@/app/shared/lib/markdown": { parseMarkdown, serializeMarkdown },
+    "@/app/shared/lib/post-urls": { canonicalPostSlug },
     "../_lib/markdown-edits": { getMarkdownEdit, getMarkdownImageEdit },
   };
   const sandbox = {
@@ -414,7 +422,7 @@ test("입력과 시간 경과는 자동 저장하지 않고 임시저장 동작�
   assert.equal(warned, false);
 });
 
-test("임시저장 응답이 늦어도 최신 입력을 보존하고 서버가 확정한 주소로 다음 변경을 저장한다", async (context) => {
+test("임시저장 응답이 늦어도 최신 입력을 보존하고 첫 발행 전 주소는 비워 둔다", async (context) => {
   const fixture = await writerFixture(context);
   const pending = deferred();
   let snapshot;
@@ -427,14 +435,14 @@ test("임시저장 응답이 늦어도 최신 입력을 보존하고 서버가 �
   fixture.edit(latestContent);
   const sameSave = fixture.act((writer) => writer.saveDraft());
   assert.equal(fixture.requests.filter((request) => request.method === "POST").length, 1);
-  pending.resolve(response({ draft: { ...snapshot, slug: "canonical-post-2", updatedAt: "2026-11-15T01:00:00.000Z" } }));
+  pending.resolve(response({ draft: { ...snapshot, slug: "", updatedAt: "2026-11-15T01:00:00.000Z" } }));
   assert.equal(await sameSave, true);
   await fixture.flush();
   assert.equal(fixture.value.draft.title, "수정한 제목");
   assert.equal(fixture.value.draft.subtitle, "응답보다 최신인 부제");
   assert.deepEqual(fixture.value.draft.content, latestContent);
   assert.equal(fixture.value.draft.description, "응답보다 최신인 부제");
-  assert.equal(fixture.value.draft.slug, "canonical-post-2");
+  assert.equal(fixture.value.draft.slug, "");
   assert.equal(fixture.value.dirty, true);
   fixture.advanceTimers();
   await fixture.flush();
@@ -442,7 +450,7 @@ test("임시저장 응답이 늦어도 최신 입력을 보존하고 서버가 �
   assert.equal(await fixture.act((writer) => writer.saveDraft()), true);
   await fixture.flush();
   const savedRequest = fixture.requests.filter((request) => request.method === "POST").at(-1);
-  assert.equal(savedRequest.body.slug, "canonical-post-2");
+  assert.equal(savedRequest.body.slug, "");
   assert.equal(savedRequest.body.subtitle, "응답보다 최신인 부제");
   assert.deepEqual(savedRequest.body.content, latestContent);
   assert.equal(fixture.value.dirty, false);
@@ -454,26 +462,30 @@ test("발행 실패 복구와 재시도가 서버의 확정 주소 및 작성 �
   fixture.act((writer) => writer.updateDraft({ title: "같은 제목", subtitle: "발행할 부제" }));
   fixture.edit({ type: "doc", content: [{ type: "paragraph", content: [{ type: "text", text: "발행할 본문" }] }] });
   fixture.queue("POST", "/publish", ({ body }) => {
-    fixture.documents.set(body.draft.id, { ...body.draft, slug: "server-post-2", updatedAt: "2026-11-15T02:00:00.000Z" });
+    const committed = { ...body.draft, slug: "2", updatedAt: "2026-11-15T02:00:00.000Z" };
+    fixture.documents.set(committed.id, committed);
+    fixture.published.set(committed.id, structuredClone(committed));
     return response({ error: "모의 푸시 실패", code: "PUSH_FAILED", commit: "mock-commit" }, 502);
   });
   await fixture.act((writer) => writer.publish());
   await fixture.flush();
   assert.equal(fixture.value.pendingCommit, "mock-commit");
-  assert.equal(fixture.value.draft.slug, "server-post-2");
+  assert.equal(fixture.value.draft.slug, "2");
   assert.equal(fixture.value.draft.subtitle, "발행할 부제");
   assert.equal(fixture.value.published, null);
   assert.deepEqual(fixture.navigation, []);
   fixture.act((writer) => writer.changeTitle("발행 뒤 수정한 제목"));
-  assert.equal(fixture.value.draft.slug, "server-post-2");
-  fixture.queue("POST", "/publish", ({ body }) => response({ draft: body.draft, slug: body.draft.slug, url: "/posts/" + body.draft.slug + "/", commit: "mock-commit", pushed: true }));
+  assert.equal(fixture.value.draft.slug, "2");
+  fixture.queue("POST", "/publish", ({ body }) => response(publicationResult(body.draft)));
   await fixture.act((writer) => writer.publish());
   await fixture.flush();
   const attempts = fixture.requests.filter((request) => request.path === "/publish");
   assert.equal(attempts.length, 2);
-  assert.equal(attempts[1].body.draft.slug, "server-post-2");
+  assert.equal(attempts[0].body.draft.slug, "");
+  assert.equal(attempts[1].body.draft.slug, "2");
   assert.equal(attempts[1].body.draft.title, "발행 뒤 수정한 제목");
-  assert.equal(fixture.value.published.url, "/posts/server-post-2/");
+  assert.equal(fixture.value.published.url, "/posts/2/");
+  assert.equal(fixture.value.published.commit, "mock-commit");
   assert.deepEqual(fixture.navigation, ["/"]);
   assert.equal(fixture.value.pendingCommit, "");
   assert.equal(fixture.value.dirty, false);
@@ -611,7 +623,7 @@ test("임시글 삭제 취소는 저장한 글과 현재 미저장 원문을 그
 });
 
 test("현재 임시글만 삭제하고 이미 게시한 글과 다른 임시글은 보존한다", async (context) => {
-  const saved = draft();
+  const saved = draft({ slug: "1" });
   const other = draft({ title: "다른 임시글", slug: "other-post" });
   const fixture = await writerFixture(context, { initial: saved, publishedRecords: [saved], storageEntries: [["junho.writer.last-draft", saved.id]] });
   fixture.documents.set(other.id, other);
@@ -836,7 +848,7 @@ test("발행 성공 뒤 마지막 목록 응답을 기다리다 화면을 해제
   const initialLists = fixture.requests.filter((request) => request.path === "/drafts" && request.method === "GET").length;
   fixture.queue("GET", "/drafts", () => response({ drafts: fixture.value.drafts }));
   fixture.queue("GET", "/drafts", () => pending.promise);
-  fixture.queue("POST", "/publish", ({ body }) => response({ draft: body.draft, slug: body.draft.slug, url: "/posts/" + body.draft.slug + "/", commit: "mock-published-commit", pushed: true }));
+  fixture.queue("POST", "/publish", ({ body }) => response(publicationResult(body.draft, "mock-published-commit")));
   const publishing = fixture.act((writer) => writer.publish());
   await fixture.flush();
   assert.equal(fixture.requests.filter((request) => request.path === "/publish").length, 1);
@@ -874,7 +886,7 @@ test("부제목이 없거나 비어 있으면 입력을 보존한 채 저장과 
     assert.equal(fixture.storageWrites.length, 0);
 
     fixture.act((writer) => writer.updateDraft({ subtitle: "발행에 필요한 부제목" }));
-    fixture.queue("POST", "/publish", ({ body }) => response({ draft: body.draft, slug: body.draft.slug, url: "/posts/" + body.draft.slug + "/", commit: "mock-subtitle-commit", pushed: true }));
+    fixture.queue("POST", "/publish", ({ body }) => response(publicationResult(body.draft, "mock-subtitle-commit")));
     await fixture.act((writer) => writer.publish());
     await fixture.flush();
     assert.equal(fixture.requests.filter((request) => request.path === "/drafts" && request.method === "POST").length, 1);
@@ -903,13 +915,16 @@ test("부제목이 비어 있어도 수동 임시저장은 허용하고 발행 �
 });
 
 test("새 글과 저장한 미발행 초안은 수정 모드가 아니며 첫 발행 성공 이후에만 수정 모드가 된다", async (context) => {
-  const fixture = await writerFixture(context);
+  const fixture = await writerFixture(context, { publishedRecords: [draft({ slug: "1" })] });
   assert.equal(fixture.value.isEditing, false);
+  assert.equal(fixture.value.draft.slug, "");
   fixture.act((writer) => writer.updateDraft({ title: "새로 작성한 글", subtitle: "처음 발행할 부제목", category: "React" }));
   fixture.edit("임시저장과 발행을 구분하는 본문입니다.");
+  assert.equal(fixture.value.draft.slug, "");
   assert.equal(await fixture.act((writer) => writer.saveDraft()), true);
   await fixture.flush();
   const saved = structuredClone(fixture.documents.get(fixture.value.draft.id));
+  assert.equal(saved.slug, "");
   assert.equal(fixture.value.isEditing, false);
   assert.equal(fixture.value.drafts.find((item) => item.id === saved.id).isPublished, false);
   const reloaded = await writerFixture(context, { initial: saved });
@@ -917,13 +932,20 @@ test("새 글과 저장한 미발행 초안은 수정 모드가 아니며 첫 �
   assert.equal(new URL(reloaded.location.href).searchParams.has("post"), false);
 
   fixture.queue("POST", "/publish", ({ body }) => {
-    fixture.published.set(body.draft.id, structuredClone(body.draft));
-    return response({ draft: body.draft, slug: body.draft.slug, url: "/posts/" + body.draft.slug + "/", commit: "new-publication", pushed: true });
+    assert.equal(body.draft.slug, "");
+    const result = publicationResult(body.draft, "new-publication");
+    fixture.documents.set(result.draft.id, structuredClone(result.draft));
+    fixture.published.set(result.draft.id, structuredClone(result.draft));
+    return response(result);
   });
   await fixture.act((writer) => writer.publish());
   await fixture.flush();
   assert.equal(fixture.value.isEditing, true);
   assert.equal(fixture.value.published.wasEditing, false);
+  assert.equal(fixture.value.draft.slug, "2");
+  assert.equal(fixture.value.published.url, "/posts/2/");
+  fixture.act((writer) => writer.changeTitle("발행 이후 바꾼 제목"));
+  assert.equal(fixture.value.draft.slug, "2");
 });
 
 test("발행한 글의 로컬 초안은 제목 수정과 임시저장 및 새로고침 뒤에도 수정 모드를 유지한다", async (context) => {
@@ -1019,6 +1041,22 @@ test("이전 서버의 수정 URL은 새로고침에도 보존하고 명시한 �
   assert.equal(unpublished.value.isEditing, false);
   assert.equal(unpublished.value.draft.id, local.id);
   assert.equal(new URL(unpublished.location.href).searchParams.has("post"), false);
+});
+
+test("주소가 바뀐 글의 이전 수정 링크와 로컬 초안을 함께 보존한다", async (context) => {
+  const { previous, current } = postSlugMigrations[0];
+  const published = draft({ slug: current });
+  const saved = { ...published, slug: previous, title: "저장한 수정 제목" };
+  const fixture = await writerFixture(context, {
+    queryId: null,
+    queryPost: previous,
+    draftRecords: [saved],
+    publishedRecords: [published],
+  });
+  assert.equal(fixture.value.isEditing, true);
+  assert.equal(fixture.value.draft.id, published.id);
+  assert.equal(fixture.value.draft.title, saved.title);
+  assert.equal(new URL(fixture.location.href).searchParams.get("post"), current);
 });
 
 test("기존 게시글의 수정 발행이 실패해도 수정 모드와 원문을 보존하고 같은 글로 재시도한다", async (context) => {

@@ -12,12 +12,10 @@ import { randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import { copyFile, lstat, mkdir, open, readFile, readdir, rename, rm, unlink, writeFile } from "node:fs/promises";
 
 import { readCleanupFile, removeCleanupFile, restoreCleanupFile, prepareMediaCleanup, finishMediaCleanup } from "./editor-media-cleanup.mjs";
+import { postPath, postSlugMigrations } from "../app/shared/lib/post-urls.ts";
 import {
   SLUG_PATTERN,
   MAX_POST_BYTES,
-  MAX_SLUG_BYTES,
-  MAX_SLUG_LENGTH,
-  slugifyTitle,
   parseBlogDocument,
   validatePostSubtitle,
 } from "../app/shared/lib/content.ts";
@@ -193,8 +191,12 @@ export function createEditorService(options = {}) {
   const mediaRoot = join(stateRoot, "media");
   const cleanupRoot = join(stateRoot, "image-cleanup");
   const postsRoot = join(appRoot, "content", "posts");
+  const sequencePath = join(appRoot, "content", "post-sequence.json");
   const uploadsRoot = join(appRoot, "public", "uploads");
-  const reservedSlugs = new Set(options.reservedSlugs || []);
+  const reservedSlugs = new Set([
+    ...(options.reservedSlugs || []),
+    ...postSlugMigrations.map(({ previous }) => previous),
+  ]);
   let pending = Promise.resolve();
 
   // 앱과 저장소에 한정한 Git 명령 실행
@@ -225,57 +227,52 @@ export function createEditorService(options = {}) {
     return Promise.all(names.filter((name) => name.endsWith(".json")).map(async (name) => parseBlogDocument(JSON.parse(await readFile(join(postsRoot, name), "utf8")), { publish: true })));
   }
 
-  // 발행 주소는 고정하고 새 글의 제목 주소 충돌은 자동 해소
-  async function assignDocumentSlug(document) {
-    const published = await readPublishedDocuments();
-    const previous = published.find((item) => item.id === document.id);
+  // 이전에 발급한 번호를 기준으로 다음 게시글 번호 준비
+  async function allocatePostNumber(published) {
+    const previous = await readOptional(sequencePath);
+    let lastIssued = 0;
     if (previous) {
-      document.slug = previous.slug;
-      return document;
-    }
-    if (!document.title) {
-      document.slug = "";
-      return document;
-    }
-    const base = slugifyTitle(document.title) || "post-" + document.id;
-    const used = new Set([...reservedSlugs, ...published.map((item) => item.slug)]);
-    let slug = base;
-    let index = 1;
-    while (used.has(slug)) {
-      index += 1;
-      const suffix = "-" + index;
-      let stem = base;
-      while (Array.from(stem + suffix).length > MAX_SLUG_LENGTH || Buffer.byteLength(stem + suffix) > MAX_SLUG_BYTES) {
-        stem = Array.from(stem).slice(0, -1).join("").replace(/-$/g, "");
+      try {
+        lastIssued = JSON.parse(previous.toString("utf8")).lastIssued;
+        if (!Number.isSafeInteger(lastIssued) || lastIssued < 0) throw new Error("Invalid post sequence");
+      } catch {
+        throw editorError(409, "게시글 번호 기록을 확인해 주세요.", "POST_SEQUENCE_INVALID");
       }
-      slug = stem + suffix;
     }
-    document.slug = slug;
-    return document;
+
+    for (const { slug } of published) {
+      if (/^[1-9]\d*$/.test(slug)) lastIssued = Math.max(lastIssued, Number(slug));
+    }
+    let number = lastIssued + 1;
+    while (Number.isSafeInteger(number) && reservedSlugs.has(String(number))) number += 1;
+    if (!Number.isSafeInteger(number)) throw editorError(409, "게시글 번호 범위를 확인해 주세요.", "POST_SEQUENCE_INVALID");
+    return { path: sequencePath, previous, value: { lastIssued: number } };
   }
 
   // UUID에 한정한 임시 글 읽기
-  async function readDraft(id) {
+  async function readDraft(id, publications) {
     if (!uuidPattern.test(id)) throw editorError(400, "글 식별자를 확인해 주세요.");
     const bytes = await readOptional(join(draftsRoot, id + ".json"));
+    const published = (publications ?? await readPublishedDocuments()).find((document) => document.id === id);
     if (!bytes) {
-      const published = (await readPublishedDocuments()).find((document) => document.id === id);
       if (published) return published;
       throw editorError(404, "저장된 글을 찾을 수 없습니다.");
     }
-    return parseBlogDocument(JSON.parse(bytes.toString("utf8")));
+    const document = parseBlogDocument(JSON.parse(bytes.toString("utf8")));
+    return { ...document, slug: published?.slug ?? "" };
   }
 
   // 저장 시각과 변경 충돌을 확인한 임시 글 저장
-  async function saveDraftRecord(value) {
-    const document = await assignDocumentSlug(parseBlogDocument(value));
+  async function saveDraftRecord(value, publications) {
+    const document = parseBlogDocument(value);
+    document.slug = (publications ?? await readPublishedDocuments()).find((item) => item.id === document.id)?.slug ?? "";
     await ensureDirectory(appRoot, draftsRoot);
     const path = join(draftsRoot, document.id + ".json");
     const existingBytes = await readOptional(path);
     const existing = existingBytes ? parseBlogDocument(JSON.parse(existingBytes.toString("utf8"))) : null;
     const unchanged = existing !== null && sameDraft(document, existing);
-    if (unchanged && existing.slug === document.slug) return existing;
-    if (existing && !unchanged && existing.updatedAt !== document.updatedAt) throw editorError(409, "다른 창에서 수정된 글입니다. 저장된 글을 다시 열어 주세요.", "DRAFT_CONFLICT");
+    if (unchanged) return { ...existing, slug: document.slug };
+    if (existing && existing.updatedAt !== document.updatedAt) throw editorError(409, "다른 창에서 수정된 글입니다. 저장된 글을 다시 열어 주세요.", "DRAFT_CONFLICT");
     document.updatedAt = new Date(Math.max(Date.now(), existing ? Date.parse(existing.updatedAt) + 1 : 0)).toISOString();
     await writeJson(path, document);
     return document;
@@ -315,10 +312,10 @@ export function createEditorService(options = {}) {
   // 저장된 임시 글 목록 조회
   async function listDrafts() {
     await ensureDirectory(appRoot, draftsRoot);
-    const names = (await readdir(draftsRoot)).filter((name) => name.endsWith(".json") && uuidPattern.test(name.slice(0, -5)));
-    const documents = await Promise.all(names.map((name) => readDraft(name.slice(0, -5))));
-    const ids = new Set(documents.map((document) => document.id));
     const published = await readPublishedDocuments();
+    const names = (await readdir(draftsRoot)).filter((name) => name.endsWith(".json") && uuidPattern.test(name.slice(0, -5)));
+    const documents = await Promise.all(names.map((name) => readDraft(name.slice(0, -5), published)));
+    const ids = new Set(documents.map((document) => document.id));
     const publishedIds = new Set(published.map((document) => document.id));
     documents.push(...published.filter((document) => !ids.has(document.id)));
     return documents.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).map(({ id, title, slug, updatedAt }) => ({ id, title, slug, updatedAt, isLocalDraft: ids.has(id), isPublished: publishedIds.has(id) }));
@@ -417,6 +414,9 @@ export function createEditorService(options = {}) {
     try { await git(["cat-file", "-e", "HEAD:" + marker]); } catch {
       throw editorError(409, "글쓰기 기능 변경을 먼저 커밋한 뒤 발행해 주세요.", "EDITOR_SETUP_REQUIRED");
     }
+    if (await git(["status", "--porcelain", "--untracked-files=all", "--", relative(repoRoot, sequencePath)])) {
+      throw editorError(409, "게시글 번호 기록에 Git 변경이 있습니다. 확인한 뒤 다시 발행해 주세요.", "POST_SEQUENCE_CHANGED");
+    }
   }
 
   // 이전 버전에서 빠진 이미지와 실패 후 정리 대기 목록 준비
@@ -455,23 +455,31 @@ export function createEditorService(options = {}) {
     }
   }
 
-  // 게시글과 참조 이미지 및 미사용 이미지 삭제를 같은 커밋으로 발행
+  // 글 번호 기록과 게시글 및 이미지 변경을 같은 커밋으로 발행
   async function publishRecord(value) {
-    const draft = await saveDraftRecord(value);
-    validatePostSubtitle(draft);
-    const { publication, media } = await preparePublication(draft);
-    if (Buffer.byteLength(JSON.stringify(publication, null, 2) + "\n") > MAX_POST_BYTES) throw editorError(413, "발행할 본문이 너무 깁니다. 글을 나누거나 일부 내용을 줄여 주세요.");
-    await validatePublication(publication);
+    const published = await readPublishedDocuments();
+    const savedDraft = await saveDraftRecord(value, published);
+    validatePostSubtitle(savedDraft);
     await validateGitState();
-    const postPath = join(postsRoot, publication.slug + ".json");
-    const previous = await readOptional(postPath);
+    const sequence = savedDraft.slug ? null : await allocatePostNumber(published);
+    const draft = sequence ? { ...savedDraft, slug: String(sequence.value.lastIssued) } : savedDraft;
+    const { publication, media } = await preparePublication(draft);
+    const publishedBytes = Buffer.from(JSON.stringify(publication, null, 2) + "\n");
+    if (publishedBytes.length > MAX_POST_BYTES) throw editorError(413, "발행할 본문이 너무 깁니다. 글을 나누거나 일부 내용을 줄여 주세요.");
+    await validatePublication(publication);
+    const postFile = join(postsRoot, publication.slug + ".json");
+    const previous = await readOptional(postFile);
+    const writes = [{ path: postFile, previous, value: publication, bytes: publishedBytes }];
+    if (sequence) writes.push({ ...sequence, bytes: Buffer.from(JSON.stringify(sequence.value, null, 2) + "\n") });
     const cleanup = await preparePublicationCleanup(publication, previous ? parseBlogDocument(JSON.parse(previous.toString("utf8")), { publish: true }) : null);
     const mediaPaths = media.map((item) => join(uploadsRoot, item.id + "." + item.extension));
     const retiredMedia = cleanup.assets.map((asset) => asset.publicFile).filter(Boolean);
-    const paths = [postPath, ...mediaPaths, ...retiredMedia.map((item) => item.path)].map((path) => relative(repoRoot, path));
+    const documentPaths = writes.map((item) => relative(repoRoot, item.path));
+    const imagePaths = [...mediaPaths, ...retiredMedia.map((item) => item.path)];
+    const paths = [...documentPaths, ...imagePaths.map((path) => relative(repoRoot, path))];
     if (await git(["diff", "--cached", "--name-only", "--", ...paths])) throw editorError(409, "이 글의 파일이 이미 스테이징되어 있습니다. Git 작업을 마친 뒤 다시 발행해 주세요.");
-    if (await git(["diff", "--name-only", "--", relative(repoRoot, postPath)])) throw editorError(409, "발행 파일이 다른 곳에서 수정됐습니다. 변경사항을 먼저 확인해 주세요.");
-    const publishedBytes = Buffer.from(JSON.stringify(publication, null, 2) + "\n");
+    if (await git(["diff", "--name-only", "--", ...documentPaths])) throw editorError(409, "발행 파일이 다른 곳에서 수정됐습니다. 변경사항을 먼저 확인해 주세요.");
+    const written = [];
     const createdMedia = [];
     const removedMedia = [];
     let committing = false;
@@ -491,7 +499,13 @@ export function createEditorService(options = {}) {
         await removeCleanupFile(appRoot, item);
         removedMedia.push(item);
       }
-      await writeJson(postPath, publication);
+      for (const file of writes) {
+        const current = await readOptional(file.path);
+        const unchanged = file.previous ? current?.equals(file.previous) : current === null;
+        if (!unchanged) throw editorError(409, "발행 파일이 다른 곳에서 수정됐습니다. 변경사항을 먼저 확인해 주세요.");
+        await writeJson(file.path, file.value);
+        written.push(file);
+      }
       committing = true;
       await git(["add", "--", ...paths]);
       if (await git(["diff", "--cached", "--name-only", "--", ...paths])) {
@@ -499,9 +513,11 @@ export function createEditorService(options = {}) {
       }
     } catch (error) {
       if (committing) await git(["restore", "--staged", "--", ...paths]).catch(() => {});
-      const current = await readOptional(postPath);
-      if (current?.equals(publishedBytes)) {
-        if (previous) await writeFile(postPath, previous); else await rm(postPath, { force: true });
+      for (const file of written.reverse()) {
+        const current = await readOptional(file.path);
+        if (current?.equals(file.bytes)) {
+          if (file.previous) await writeFile(file.path, file.previous); else await rm(file.path, { force: true });
+        }
       }
       for (const item of createdMedia) {
         const currentImage = await readOptional(item.path);
@@ -520,7 +536,7 @@ export function createEditorService(options = {}) {
       throw editorError(502, "글은 커밋됐지만 푸시에 실패했습니다. Git 연결을 확인한 뒤 다시 발행해 주세요.", "PUSH_FAILED", commit);
     }
     const cleanupResult = await completePublicationCleanup(publication, cleanup);
-    return { draft, slug: publication.slug, url: "/posts/" + publication.slug + "/", commit, pushed: true, cleanup: cleanupResult };
+    return { draft, slug: publication.slug, url: postPath(publication.slug), commit, pushed: true, cleanup: cleanupResult };
   }
 
   return {

@@ -12,6 +12,7 @@ import { execFile } from "node:child_process";
 import { lstat, mkdtemp, mkdir, readFile, readdir, rm, stat, symlink, writeFile } from "node:fs/promises";
 
 import { createEditorService, startEditorServer } from "../scripts/editor-server.mjs";
+import { canonicalPostSlug } from "../app/shared/lib/post-urls.ts";
 import { MAX_POST_BYTES, parseBlogDocument, toArticlePost } from "../app/shared/lib/content.ts";
 
 const execFileAsync = promisify(execFile);
@@ -54,7 +55,7 @@ function document(overrides = {}) {
   return {
     version: 1,
     id: randomUUID(),
-    slug: "editor-test-post",
+    slug: "",
     title: "Editor test post",
     subtitle: "발행에 필요한 테스트 부제목입니다.",
     description: "발행 연결을 확인하는 격리된 테스트입니다.",
@@ -67,9 +68,22 @@ function document(overrides = {}) {
   };
 }
 
+// 이전 환경의 공개 글을 테스트 저장소에 기록
+async function seedPublication({ root, appRoot }, source) {
+  const publication = parseBlogDocument(source, { publish: true });
+  const directory = join(appRoot, "content/posts");
+  const path = join(directory, publication.slug + ".json");
+  await mkdir(directory, { recursive: true });
+  await writeFile(path, JSON.stringify(publication, null, 2) + "\n");
+  await git(root, "add", path);
+  await git(root, "commit", "-m", "test: seed previous publication");
+  return publication;
+}
+
 // 본문 구조 제한 안에서 지정한 UTF-8 발행 크기의 다문단 문서 구성
 function documentAtPublicationBytes(bytes) {
   const source = parseBlogDocument(document({
+    slug: "1",
     readingMinutes: 1,
     content: { type: "doc", content: Array.from({ length: 4000 }, () => ({
       type: "paragraph", content: [{ type: "text", text: "가" }],
@@ -104,6 +118,7 @@ async function publishedPostLoader(appRoot) {
       if (specifier === "node:path") return { join };
       if (specifier === "node:fs/promises") return { readdir, readFile, stat };
       if (specifier === "../lib/content") return { MAX_POST_BYTES, parseBlogDocument, toArticlePost };
+      if (specifier === "../lib/post-urls") return { canonicalPostSlug };
       throw new Error("검증에서 허용하지 않은 발행 조회 의존성입니다: " + specifier);
     },
   }, { filename: "published-posts.ts" });
@@ -127,12 +142,13 @@ test("임시 저장은 공개 파일을 만들지 않으며 이전 버전의 동
   const { appRoot, service } = await fixture(context);
   const source = document({ title: "", subtitle: "", slug: "", category: "", date: "", content: { type: "doc", content: [] } });
   const saved = await service.saveDraft(source);
+  strict.equal(saved.slug, "");
   strict.equal(saved.readingMinutes, 0);
   strict.equal((await service.readDraft(saved.id)).id, saved.id);
   strict.equal((await service.listDrafts()).length, 1);
   strict.equal((await service.saveDraft(source)).updatedAt, saved.updatedAt);
   await strict.rejects(service.saveDraft({ ...source, title: "충돌할 수정" }), { code: "DRAFT_CONFLICT" });
-  await strict.rejects(readFile(join(appRoot, "content/posts/editor-test-post.json")), { code: "ENOENT" });
+  await strict.rejects(readFile(join(appRoot, "content/posts/1.json")), { code: "ENOENT" });
   await strict.rejects(service.readDraft("../../README"), { status: 400 });
 });
 
@@ -334,7 +350,9 @@ test("임시 글 삭제는 파일과 두 상위 저장 폴더의 심볼릭 링�
 test("저장소 경로를 생략하면 단독 앱 루트의 글만 발행하고 임시 글은 제외한다", async (context) => {
   const { root, service, remote } = await fixture(context);
   const result = await service.publish(document());
-  strict.deepEqual((await git(root, "diff", "HEAD~1", "HEAD", "--name-only")).split("\n"), ["content/posts/editor-test-post.json"]);
+  strict.equal(result.slug, "1");
+  strict.equal(result.url, "/posts/1/");
+  strict.deepEqual((await git(root, "diff", "HEAD~1", "HEAD", "--name-only")).split("\n"), ["content/post-sequence.json", "content/posts/1.json"]);
   strict.equal(await git(root, "remote", "get-url", "--push", "--all", "origin"), remote);
   strict.equal(await git(remote, "rev-parse", "main"), result.commit);
   strict.equal(await git(root, "status", "--porcelain"), "");
@@ -354,7 +372,8 @@ test("발행 JSON이 2,000,001바이트이면 초안을 보존하고 공개 파�
   strict(Buffer.byteLength(JSON.stringify(source, null, 2) + "\n") <= 2 * 1024 * 1024);
   await strict.rejects(service.publish(source), { status: 413 });
   const saved = await service.readDraft(source.id);
-  strict.deepEqual(saved, { ...source, updatedAt: saved.updatedAt });
+  strict.equal(saved.slug, "");
+  strict.deepEqual(saved, { ...source, slug: "", updatedAt: saved.updatedAt });
   await strict.rejects(readFile(join(appRoot, "content/posts", source.slug + ".json")), { code: "ENOENT" });
   strict.equal(await git(root, "rev-parse", "HEAD"), before);
   strict.equal(await git(remote, "rev-parse", "main"), remoteBefore);
@@ -373,7 +392,7 @@ test("발행 JSON이 정확히 2,000,000바이트인 글은 정상 발행하고 
   strict.equal(result.pushed, true);
   strict.equal(await git(root, "rev-parse", "HEAD"), result.commit);
   strict.equal(await git(remote, "rev-parse", "main"), result.commit);
-  strict.deepEqual((await git(root, "diff", "HEAD~1", "HEAD", "--name-only")).split("\n"), ["content/posts/" + result.slug + ".json"]);
+  strict.deepEqual((await git(root, "diff", "HEAD~1", "HEAD", "--name-only")).split("\n"), ["content/post-sequence.json", "content/posts/" + result.slug + ".json"]);
   const loader = await publishedPostLoader(appRoot);
   const post = await loader.getPostBySlug(result.slug);
   strict.equal(post.slug, result.slug);
@@ -392,9 +411,9 @@ test("이미지를 재작성한 글만 커밋하며 다른 스테이징과 READM
   strict.equal(await readFile(join(root, "README.md"), "utf8"), "Original blog README\n");
   strict.equal(await git(root, "diff", "--cached", "--name-only"), "unrelated.txt");
   const changed = (await git(root, "diff", "HEAD~1", "HEAD", "--name-only")).split("\n");
-  strict.equal(changed.length, 2);
-  strict(changed.every((path) => path.startsWith("content/posts/") || path.startsWith("public/uploads/")));
-  const published = JSON.parse(await readFile(join(appRoot, "content/posts/editor-test-post.json"), "utf8"));
+  strict.equal(changed.length, 3);
+  strict(changed.every((path) => path === "content/post-sequence.json" || path.startsWith("content/posts/") || path.startsWith("public/uploads/")));
+  const published = JSON.parse(await readFile(join(appRoot, "content/posts", result.slug + ".json"), "utf8"));
   strict(published.readingMinutes >= 1);
   strict(published.heroImage.src.startsWith("/uploads/"));
   strict.equal(published.content.content[0].attrs.src, published.heroImage.src);
@@ -687,20 +706,80 @@ test("메타데이터와 일치하지 않는 실제 임시 마크다운 이미�
   strict.equal(await git(root, "status", "--porcelain"), "");
 });
 
-test("필수 입력은 발행 전에 확인하고 예약 주소와 다른 글의 주소 충돌은 자동 해소한다", async (context) => {
+test("필수 입력 확인 뒤 제목과 무관한 연속 번호를 발행하고 수정은 같은 주소를 유지한다", async (context) => {
   const { appRoot, service } = await fixture(context);
   const image = await service.uploadMedia(tinyPng, "그림.png");
   await strict.rejects(service.publish(document({ title: "", heroImage: image })));
   await strict.rejects(readFile(join(appRoot, "public", image.src.slice(1))), { code: "ENOENT" });
   const reserved = await service.publish(document({ title: "Reserved example", slug: "" }));
-  strict.equal(reserved.slug, "reserved-example-2");
+  strict.equal(reserved.slug, "1");
   const source = document();
   const result = await service.publish(source);
   const duplicate = await service.publish(document());
-  strict.equal(duplicate.slug, "editor-test-post-2");
+  strict.equal(result.slug, "2");
+  strict.equal(duplicate.slug, "3");
   const edited = await service.publish({ ...result.draft, title: "다른 제목", slug: "changed-address" });
-  strict.equal(edited.slug, "editor-test-post");
-  strict.equal((await service.readDraft(result.draft.id)).slug, "editor-test-post");
+  strict.equal(edited.slug, "2");
+  strict.equal(edited.url, "/posts/2/");
+  strict.equal((await service.readDraft(result.draft.id)).slug, "2");
+});
+
+test("기존 1번 글 다음은 2번과 3번이며 최고 글 삭제와 서버 재시작 뒤에도 번호를 재사용하지 않는다", async (context) => {
+  const environment = await fixture(context);
+  const { root, appRoot, service } = environment;
+  const first = await seedPublication(environment, document({ slug: "1", title: "기존 첫 번째 글" }));
+  const firstPath = join(appRoot, "content/posts/1.json");
+  const original = await readFile(firstPath);
+  const secondDraft = await service.saveDraft(document({ title: "같은 제목" }));
+  const thirdDraft = await service.saveDraft(document({ title: "같은 제목" }));
+  strict.equal(secondDraft.slug, "");
+  strict.equal(thirdDraft.slug, "");
+  const second = await service.publish(secondDraft);
+  const third = await service.publish(thirdDraft);
+  strict.equal(second.slug, "2");
+  strict.equal(second.url, "/posts/2/");
+  strict.equal(third.slug, "3");
+  strict.equal(third.url, "/posts/3/");
+  strict.deepEqual(await readFile(firstPath), original);
+  strict.equal((await service.readDraft(first.id)).slug, "1");
+  strict.equal(JSON.parse(await readFile(join(appRoot, "content/post-sequence.json"), "utf8")).lastIssued, 3);
+
+  await git(root, "rm", "content/posts/3.json");
+  await git(root, "commit", "-m", "test: remove highest publication");
+  const restarted = createEditorService({ appRoot });
+  const fourth = await restarted.publish(document({ title: "삭제 뒤 새 글" }));
+  strict.equal(fourth.slug, "4");
+  strict.equal(fourth.url, "/posts/4/");
+  strict.equal(JSON.parse(await readFile(join(appRoot, "content/post-sequence.json"), "utf8")).lastIssued, 4);
+});
+
+test("동시에 처음 발행하는 서로 다른 문서는 같은 번호를 배정받지 않는다", async (context) => {
+  const { appRoot, service } = await fixture(context);
+  const sources = Array.from({ length: 3 }, () => document({ title: "동시에 발행할 같은 제목" }));
+  const results = await Promise.all(sources.map((source) => service.publish(source)));
+  strict.deepEqual(results.map((result) => result.slug).sort(), ["1", "2", "3"]);
+  strict.equal(new Set(results.map((result) => result.slug)).size, sources.length);
+  for (const result of results) {
+    const publication = JSON.parse(await readFile(join(appRoot, "content/posts", result.slug + ".json"), "utf8"));
+    strict.equal(result.url, "/posts/" + result.slug + "/");
+    strict.equal(publication.id, result.draft.id);
+    strict(sources.some((source) => source.id === publication.id));
+  }
+});
+
+test("이미 발행한 비숫자 주소는 수정해도 유지하고 이후 새 글에만 번호를 배정한다", async (context) => {
+  const environment = await fixture(context);
+  const { appRoot, service } = environment;
+  const previous = await seedPublication(environment, document({ slug: "legacy-post", title: "기존 주소의 글" }));
+  const saved = await service.saveDraft({ ...previous, title: "새 제목으로 임시 저장" });
+  strict.equal(saved.slug, "legacy-post");
+  const edited = await service.publish({ ...saved, title: "수정 발행한 제목", slug: "change-attempt" });
+  strict.equal(edited.slug, "legacy-post");
+  strict.equal(edited.url, "/posts/legacy-post/");
+  strict.equal(JSON.parse(await readFile(join(appRoot, "content/posts/legacy-post.json"), "utf8")).id, previous.id);
+  const next = await service.publish(document({ title: "기존 주소 다음 새 글" }));
+  strict.equal(next.slug, "1");
+  strict.equal(next.url, "/posts/1/");
 });
 
 test("푸시 실패 후 같은 글을 다시 발행하면 추가 커밋 없이 배포를 재시도한다", async (context) => {
@@ -720,6 +799,8 @@ test("푸시 실패 후 같은 글을 다시 발행하면 추가 커밋 없이 �
     return true;
   });
   const result = await service.publish(source);
+  strict.equal(result.slug, "1");
+  strict.equal(result.url, "/posts/1/");
   strict.equal(result.commit, failedCommit);
   strict.equal(await git(root, "rev-parse", "HEAD"), failedCommit);
   strict.equal(await git(remote, "rev-parse", "main"), failedCommit);
@@ -736,7 +817,7 @@ test("글쓰기 기능이 커밋되지 않은 초기 환경에서는 글만 원�
   const source = document();
   await strict.rejects(service.publish(source), { code: "EDITOR_SETUP_REQUIRED", status: 409 });
   strict.equal((await service.readDraft(source.id)).id, source.id);
-  await strict.rejects(readFile(join(appRoot, "content/posts/editor-test-post.json")), { code: "ENOENT" });
+  await strict.rejects(readFile(join(appRoot, "content/posts/1.json")), { code: "ENOENT" });
   strict.equal(await git(remote, "rev-parse", "main"), before);
 });
 
@@ -763,7 +844,8 @@ test("커밋 실패 시 공개 글 파일과 다른 스테이징을 보존하고
   await strict.rejects(service.publish(source), { code: "COMMIT_FAILED" });
   strict.equal(await git(root, "diff", "--cached", "--name-only"), "unrelated.txt");
   strict.equal((await service.readDraft(source.id)).id, source.id);
-  await strict.rejects(readFile(join(appRoot, "content/posts/editor-test-post.json")), { code: "ENOENT" });
+  await strict.rejects(readFile(join(appRoot, "content/posts/1.json")), { code: "ENOENT" });
+  await strict.rejects(readFile(join(appRoot, "content/post-sequence.json")), { code: "ENOENT" });
   await strict.rejects(readFile(join(appRoot, "public/uploads", image.src.split("/").at(-1) + ".png")), { code: "ENOENT" });
   strict.deepEqual(await readFile((await service.readMedia(image.src.split("/").at(-1))).path), tinyPng);
   strict.equal(await git(remote, "rev-parse", "main"), before);
@@ -783,7 +865,7 @@ test("이미지 복사가 중단되면 새 복사본만 정리하고 기존 파�
   await strict.rejects(readFile(firstPath), { code: "ENOENT" });
   strict.equal(await readFile(secondPath, "utf8"), "Existing image must stay\n");
   strict.deepEqual(await readFile((await service.readMedia(first.src.split("/").at(-1))).path), tinyPng);
-  await strict.rejects(readFile(join(appRoot, "content/posts/editor-test-post.json")), { code: "ENOENT" });
+  await strict.rejects(readFile(join(appRoot, "content/posts/1.json")), { code: "ENOENT" });
 });
 
 test("로컬 API는 출처와 세션을 확인하고 끝 슬래시 및 원본 이미지 요청을 처리한다", async (context) => {
@@ -853,34 +935,33 @@ test("임시 글 DELETE API는 출처와 토큰 및 호스트 검사를 통과�
   strict.deepEqual((await (await fetch(base + "/drafts", { headers })).json()).drafts, []);
 });
 
-test("초안 주소는 제목 변경을 따라 자동 갱신하고 잘못된 수동 경로는 거부한다", async (context) => {
+test("초안은 제목을 변경하거나 다시 저장해도 주소를 발급하지 않고 잘못된 수동 경로는 거부한다", async (context) => {
   const { service } = await fixture(context);
-  const saved = await service.saveDraft(document({ title: "첫 번째 제목!", slug: "", subtitle: "" }));
-  strict.equal(saved.slug, "첫-번째-제목");
-  const renamed = await service.saveDraft({ ...saved, title: "다음 제목" });
-  strict.equal(renamed.slug, "다음-제목");
-  strict.equal((await service.readDraft(saved.id)).slug, "다음-제목");
+  const saved = await service.saveDraft(document({ title: "React 첫 번째 제목!", slug: "", subtitle: "" }));
+  strict.equal(saved.slug, "");
+  const renamed = await service.saveDraft({ ...saved, title: "Next.js 다음 제목" });
+  strict.equal(renamed.slug, "");
+  strict.equal((await service.readDraft(saved.id)).slug, "");
   await strict.rejects(service.saveDraft({ ...saved, title: "이전 창의 수정" }), { code: "DRAFT_CONFLICT" });
   await strict.rejects(service.saveDraft(document({ slug: "../../README" })));
 });
 
-test("긴 한글 제목의 중복 주소도 UTF-8 파일 이름 제한 안에서 자동 생성한다", async (context) => {
+test("긴 제목이 같아도 첫 발행 번호는 서로 다르게 발급한다", async (context) => {
   const { service } = await fixture(context);
-  const title = "가".repeat(60);
+  const title = "a".repeat(100);
   const first = await service.publish(document({ title, slug: "" }));
   const second = await service.publish(document({ title, slug: "" }));
-  strict.equal(Buffer.byteLength(first.slug), 180);
-  strict(second.slug.endsWith("-2"));
-  strict(Buffer.byteLength(second.slug) <= 180);
-  strict(Array.from(second.slug).length <= 96);
+  strict.equal(first.slug, "1");
+  strict.equal(second.slug, "2");
   strict.notEqual(first.slug, second.slug);
 });
 
-test("문자와 숫자가 없는 제목도 문서 식별자 기반 주소로 발행한다", async (context) => {
+test("영문과 숫자가 없는 제목도 번호 주소로 발행하고 제목 수정으로 주소를 바꾸지 않는다", async (context) => {
   const { service } = await fixture(context);
-  const source = document({ title: "😀 !!!", slug: "" });
+  const source = document({ title: "한글 제목 😀", slug: "" });
   const result = await service.publish(source);
-  strict.equal(result.slug, "post-" + source.id);
+  strict.equal(result.slug, "1");
+  strict.equal(result.url, "/posts/1/");
   const renamed = await service.publish({ ...result.draft, title: "새로운 제목" });
   strict.equal(renamed.slug, result.slug);
 });
@@ -908,7 +989,7 @@ test("첫 본문 이미지를 실제 업로드 크기로 발행하고 독립 대
   strict(!JSON.stringify(published).includes("/__editor/"));
 });
 
-test("자동 충돌 주소로 커밋된 글은 푸시 재시도에서도 주소와 커밋을 유지한다", async (context) => {
+test("번호 주소로 커밋된 새 글은 푸시 재시도에서도 주소와 커밋을 유지한다", async (context) => {
   let attempts = 0;
   const { root, service, remote } = await fixture(context, {
     push: async ({ git: runGit }) => {
@@ -925,23 +1006,24 @@ test("자동 충돌 주소로 커밋된 글은 푸시 재시도에서도 주소�
     failedCommit = error.commit;
     return true;
   });
-  strict.equal((await service.readDraft(duplicate.id)).slug, "editor-test-post-2");
+  strict.equal((await service.readDraft(duplicate.id)).slug, "2");
   const retried = await service.publish(duplicate);
-  strict.equal(retried.slug, "editor-test-post-2");
+  strict.equal(retried.slug, "2");
+  strict.equal(retried.url, "/posts/2/");
   strict.equal(retried.commit, failedCommit);
   strict.equal(await git(root, "rev-parse", "HEAD"), failedCommit);
   strict.equal(await git(remote, "rev-parse", "main"), failedCommit);
 });
 
-test("저장 응답 재시도는 그사이 발생한 자동 주소 충돌을 사용자 편집 충돌로 보지 않는다", async (context) => {
+test("다른 글이 먼저 발행되어도 미발행 초안의 저장 재시도에는 주소를 발급하지 않는다", async (context) => {
   const { service } = await fixture(context);
   const source = document();
   const saved = await service.saveDraft(source);
   await service.publish(document());
   const retried = await service.saveDraft(source);
-  strict.equal(saved.slug, "editor-test-post");
+  strict.equal(saved.slug, "");
   strict.equal(retried.id, saved.id);
-  strict.equal(retried.slug, "editor-test-post-2");
+  strict.equal(retried.slug, "");
   strict.equal((await service.readDraft(source.id)).slug, retried.slug);
   await strict.rejects(service.saveDraft({ ...source, title: "오래된 창의 편집" }), { code: "DRAFT_CONFLICT" });
 });
@@ -967,12 +1049,12 @@ test("프록시의 원본 호스트도 루프백 한 개만 허용하고 세션 
   strict.equal((await fetch(base + "/session", { headers: { Origin: "https://attacker.invalid", "X-Forwarded-Host": "localhost:3000" } })).status, 403);
 });
 
-test("기본 글 목록은 비어 있고 삭제한 예시 글 주소도 예약하지 않는다", async (context) => {
+test("빈 저장소의 첫 글은 과거 예시 제목과 무관하게 1번 주소로 발행한다", async (context) => {
   const { appRoot } = await fixture(context);
   const service = createEditorService({ appRoot });
   strict.deepEqual(await service.listDrafts(), []);
   const result = await service.publish(document({ title: "Understanding React Rendering", slug: "" }));
-  strict.equal(result.slug, "understanding-react-rendering");
+  strict.equal(result.slug, "1");
   const drafts = await service.listDrafts();
   strict.equal(drafts.length, 1);
   strict.equal(drafts[0].id, result.draft.id);

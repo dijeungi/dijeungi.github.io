@@ -2,6 +2,7 @@
 
 import { useRef, useState, useEffect } from "react";
 
+import { postDiscussionSlug } from "@/app/shared/lib/post-urls";
 import { getResolvedTheme, subscribeTheme } from "@/app/shared/lib/theme-store";
 
 // 글별 GitHub 댓글 위젯 연결과 화면 해제 관리
@@ -24,7 +25,7 @@ export function useArticleComments(slug: string) {
       category: "Announcements",
       categoryid: "DIC_kwDOVt2df84DLH1Y",
       mapping: "specific",
-      term: "posts/" + slug + "/",
+      term: "posts/" + postDiscussionSlug(slug) + "/",
       strict: "1",
       reactionsenabled: "0",
       emitmetadata: "0",

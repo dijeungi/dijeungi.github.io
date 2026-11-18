@@ -5,6 +5,7 @@ import { readFile } from "node:fs/promises";
 import { runInNewContext } from "node:vm";
 import typescript from "typescript";
 
+import { canonicalPostSlug, postSlugMigrations } from "../app/shared/lib/post-urls.ts";
 import { MAX_POST_BYTES, parseBlogDocument, toArticlePost } from "../app/shared/lib/content.ts";
 
 const source = await readFile(new URL("../app/shared/data/published-posts.ts", import.meta.url), "utf8");
@@ -51,6 +52,7 @@ function createLoader(files = new Map(), failure = null) {
     process: { cwd: () => "/virtual-blog" },
     require: (specifier) => {
       if (specifier === "node:path") return { join };
+      if (specifier === "../lib/post-urls") return { canonicalPostSlug };
       if (specifier === "../lib/content") return { MAX_POST_BYTES, parseBlogDocument, toArticlePost };
       if (specifier === "node:fs/promises") return {
         readdir: async (path, options) => {
@@ -93,6 +95,17 @@ test("잘못된 percent 인코딩은 파일 조회 없이 거부하고 없는 �
   assert.equal(reads.length, 0);
   assert.equal(await loader.getPostBySlug("missing-post"), undefined);
   assert.equal(reads.length, 1);
+});
+
+test("이전 글 주소는 변경된 발행 문서를 조회하고 글 목록에는 한 번만 나온다", async () => {
+  for (const { previous, current } of postSlugMigrations) {
+    const document = publication({ slug: current });
+    const { loader } = createLoader(new Map([[current + ".json", JSON.stringify(document)]]));
+    for (const slug of [previous, encodeURIComponent(previous), current]) {
+      assert.equal((await loader.getPostBySlug(slug))?.slug, current);
+    }
+    assert.deepEqual(Array.from(await loader.getAllPosts(), (post) => post.slug), [current]);
+  }
 });
 
 test("같은 loader가 빈 목록 이후 새 발행 문서를 즉시 읽고 예시 글은 섞지 않는다", async () => {
