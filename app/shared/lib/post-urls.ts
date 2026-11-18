@@ -22,5 +22,5 @@ export function postDiscussionSlug(slug: string): string {
 
 // 공개 글 경로 구성
 export function postPath(slug: string): string {
-  return "/posts/" + encodeURIComponent(slug) + "/";
+  return "/posts/" + encodeURIComponent(slug);
 }

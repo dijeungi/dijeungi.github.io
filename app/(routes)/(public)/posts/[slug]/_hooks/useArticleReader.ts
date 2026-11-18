@@ -116,8 +116,10 @@ export function useArticleReader() {
       window.clearTimeout(shareTimerRef.current);
     }
 
+    const url = new URL(window.location.href);
+    url.pathname = url.pathname.replace(/\/$/, "");
     setShareStatus("copying");
-    const copied = await copyToClipboard(window.location.href);
+    const copied = await copyToClipboard(url.href);
 
     if (!mountedRef.current) {
       return;

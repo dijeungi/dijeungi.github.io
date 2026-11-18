@@ -13,11 +13,11 @@ export function WriteButton({ postSlug }: { postSlug?: string }) {
   return (
     <div className={styles.actions} role="group" aria-label="글 관리">
       {postSlug && (
-        <Link className={styles.button} href={"/write/?post=" + encodeURIComponent(postSlug)} aria-label="이 글 수정" title="이 글 수정">
+        <Link className={styles.button} href={"/write?post=" + encodeURIComponent(postSlug)} aria-label="이 글 수정" title="이 글 수정">
           <WriterIcon className={styles.icon} name="edit" size={24} />
         </Link>
       )}
-      <Link className={styles.button} href="/write/" aria-label="글쓰기" title="글쓰기">
+      <Link className={styles.button} href="/write" aria-label="글쓰기" title="글쓰기">
         <WriterIcon className={styles.icon} name="plus" size={24} />
       </Link>
     </div>

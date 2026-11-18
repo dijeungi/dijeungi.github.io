@@ -39,6 +39,8 @@ jobs:
         run: npm run build
         env:
           GITHUB_TOKEN: ${{ github.token }}
+      - name: Preserve older article links
+        run: node scripts/prepare-pages-redirects.mjs
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v4
         with:

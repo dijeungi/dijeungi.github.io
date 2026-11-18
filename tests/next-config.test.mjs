@@ -52,6 +52,7 @@ test("발행 JSON이 없는 정적 배포에서는 글 상세와 로컬 글쓰�
 test("발행 JSON이 있는 정적 배포에서는 상세만 포함하고 글쓰기는 제외한다", () => {
   const { config, reads } = evaluateConfig(productionPhase, ["authored-post.json"]);
   assert.equal(config.output, "export");
+  assert.equal(config.trailingSlash ?? false, false);
   assert.deepEqual(Array.from(config.pageExtensions), ["post.tsx", "tsx", "ts", "jsx", "js"]);
   assert.equal(config.pageExtensions.includes("dev.tsx"), false);
   assert.equal(reads.length, 1);

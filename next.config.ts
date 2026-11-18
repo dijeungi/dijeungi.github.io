@@ -23,7 +23,7 @@ export default function createNextConfig(phase: string): NextConfig {
       ...(isDevelopment ? ["dev.tsx"] : hasPublishedPosts() ? ["post.tsx"] : []),
       "tsx", "ts", "jsx", "js",
     ],
-    trailingSlash: true,
+    trailingSlash: false,
     basePath: process.env.NEXT_PUBLIC_BASE_PATH || "",
     reactCompiler: true,
   };

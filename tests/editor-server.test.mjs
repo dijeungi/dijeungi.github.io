@@ -351,7 +351,7 @@ test("저장소 경로를 생략하면 단독 앱 루트의 글만 발행하고 
   const { root, service, remote } = await fixture(context);
   const result = await service.publish(document());
   strict.equal(result.slug, "1");
-  strict.equal(result.url, "/posts/1/");
+  strict.equal(result.url, "/posts/1");
   strict.deepEqual((await git(root, "diff", "HEAD~1", "HEAD", "--name-only")).split("\n"), ["content/post-sequence.json", "content/posts/1.json"]);
   strict.equal(await git(root, "remote", "get-url", "--push", "--all", "origin"), remote);
   strict.equal(await git(remote, "rev-parse", "main"), result.commit);
@@ -720,7 +720,7 @@ test("필수 입력 확인 뒤 제목과 무관한 연속 번호를 발행하고
   strict.equal(duplicate.slug, "3");
   const edited = await service.publish({ ...result.draft, title: "다른 제목", slug: "changed-address" });
   strict.equal(edited.slug, "2");
-  strict.equal(edited.url, "/posts/2/");
+  strict.equal(edited.url, "/posts/2");
   strict.equal((await service.readDraft(result.draft.id)).slug, "2");
 });
 
@@ -737,9 +737,9 @@ test("기존 1번 글 다음은 2번과 3번이며 최고 글 삭제와 서버 �
   const second = await service.publish(secondDraft);
   const third = await service.publish(thirdDraft);
   strict.equal(second.slug, "2");
-  strict.equal(second.url, "/posts/2/");
+  strict.equal(second.url, "/posts/2");
   strict.equal(third.slug, "3");
-  strict.equal(third.url, "/posts/3/");
+  strict.equal(third.url, "/posts/3");
   strict.deepEqual(await readFile(firstPath), original);
   strict.equal((await service.readDraft(first.id)).slug, "1");
   strict.equal(JSON.parse(await readFile(join(appRoot, "content/post-sequence.json"), "utf8")).lastIssued, 3);
@@ -749,7 +749,7 @@ test("기존 1번 글 다음은 2번과 3번이며 최고 글 삭제와 서버 �
   const restarted = createEditorService({ appRoot });
   const fourth = await restarted.publish(document({ title: "삭제 뒤 새 글" }));
   strict.equal(fourth.slug, "4");
-  strict.equal(fourth.url, "/posts/4/");
+  strict.equal(fourth.url, "/posts/4");
   strict.equal(JSON.parse(await readFile(join(appRoot, "content/post-sequence.json"), "utf8")).lastIssued, 4);
 });
 
@@ -761,7 +761,7 @@ test("동시에 처음 발행하는 서로 다른 문서는 같은 번호를 배
   strict.equal(new Set(results.map((result) => result.slug)).size, sources.length);
   for (const result of results) {
     const publication = JSON.parse(await readFile(join(appRoot, "content/posts", result.slug + ".json"), "utf8"));
-    strict.equal(result.url, "/posts/" + result.slug + "/");
+    strict.equal(result.url, "/posts/" + result.slug);
     strict.equal(publication.id, result.draft.id);
     strict(sources.some((source) => source.id === publication.id));
   }
@@ -775,11 +775,11 @@ test("이미 발행한 비숫자 주소는 수정해도 유지하고 이후 새 
   strict.equal(saved.slug, "legacy-post");
   const edited = await service.publish({ ...saved, title: "수정 발행한 제목", slug: "change-attempt" });
   strict.equal(edited.slug, "legacy-post");
-  strict.equal(edited.url, "/posts/legacy-post/");
+  strict.equal(edited.url, "/posts/legacy-post");
   strict.equal(JSON.parse(await readFile(join(appRoot, "content/posts/legacy-post.json"), "utf8")).id, previous.id);
   const next = await service.publish(document({ title: "기존 주소 다음 새 글" }));
   strict.equal(next.slug, "1");
-  strict.equal(next.url, "/posts/1/");
+  strict.equal(next.url, "/posts/1");
 });
 
 test("푸시 실패 후 같은 글을 다시 발행하면 추가 커밋 없이 배포를 재시도한다", async (context) => {
@@ -800,7 +800,7 @@ test("푸시 실패 후 같은 글을 다시 발행하면 추가 커밋 없이 �
   });
   const result = await service.publish(source);
   strict.equal(result.slug, "1");
-  strict.equal(result.url, "/posts/1/");
+  strict.equal(result.url, "/posts/1");
   strict.equal(result.commit, failedCommit);
   strict.equal(await git(root, "rev-parse", "HEAD"), failedCommit);
   strict.equal(await git(remote, "rev-parse", "main"), failedCommit);
@@ -961,7 +961,7 @@ test("영문과 숫자가 없는 제목도 번호 주소로 발행하고 제목 
   const source = document({ title: "한글 제목 😀", slug: "" });
   const result = await service.publish(source);
   strict.equal(result.slug, "1");
-  strict.equal(result.url, "/posts/1/");
+  strict.equal(result.url, "/posts/1");
   const renamed = await service.publish({ ...result.draft, title: "새로운 제목" });
   strict.equal(renamed.slug, result.slug);
 });
@@ -1009,7 +1009,7 @@ test("번호 주소로 커밋된 새 글은 푸시 재시도에서도 주소와 
   strict.equal((await service.readDraft(duplicate.id)).slug, "2");
   const retried = await service.publish(duplicate);
   strict.equal(retried.slug, "2");
-  strict.equal(retried.url, "/posts/2/");
+  strict.equal(retried.url, "/posts/2");
   strict.equal(retried.commit, failedCommit);
   strict.equal(await git(root, "rev-parse", "HEAD"), failedCommit);
   strict.equal(await git(remote, "rev-parse", "main"), failedCommit);

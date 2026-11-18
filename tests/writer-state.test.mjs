@@ -60,7 +60,7 @@ function jsonValue(value) {
 // 첫 발행에서 서버가 확정한 숫자 주소 응답 구성
 function publicationResult(document, commit = "mock-commit") {
   const draft = { ...document, slug: document.slug || "2" };
-  return { draft, slug: draft.slug, url: "/posts/" + draft.slug + "/", commit, pushed: true };
+  return { draft, slug: draft.slug, url: "/posts/" + draft.slug, commit, pushed: true };
 }
 
 // 실제 마크다운 훅과 확인창을 메모리 API 및 최소 DOM으로 실행
@@ -105,7 +105,7 @@ async function writerFixture(context, {
   if (queryId) parameters.set("draft", queryId);
   if (queryPost) parameters.set("post", queryPost);
   const query = parameters.toString();
-  const location = { hostname, href: locationHref || "http://" + hostname + ":3000/write/" + (query ? "?" + query : ""), reload: () => { reloads += 1; } };
+  const location = { hostname, href: locationHref || "http://" + hostname + ":3000/write" + (query ? "?" + query : ""), reload: () => { reloads += 1; } };
   const router = { replace: (href) => navigation.push(href), push: (href) => navigation.push(href) };
   const document = { activeElement: null };
 
@@ -484,7 +484,7 @@ test("발행 실패 복구와 재시도가 서버의 확정 주소 및 작성 �
   assert.equal(attempts[0].body.draft.slug, "");
   assert.equal(attempts[1].body.draft.slug, "2");
   assert.equal(attempts[1].body.draft.title, "발행 뒤 수정한 제목");
-  assert.equal(fixture.value.published.url, "/posts/2/");
+  assert.equal(fixture.value.published.url, "/posts/2");
   assert.equal(fixture.value.published.commit, "mock-commit");
   assert.deepEqual(fixture.navigation, ["/"]);
   assert.equal(fixture.value.pendingCommit, "");
@@ -943,7 +943,7 @@ test("새 글과 저장한 미발행 초안은 수정 모드가 아니며 첫 �
   assert.equal(fixture.value.isEditing, true);
   assert.equal(fixture.value.published.wasEditing, false);
   assert.equal(fixture.value.draft.slug, "2");
-  assert.equal(fixture.value.published.url, "/posts/2/");
+  assert.equal(fixture.value.published.url, "/posts/2");
   fixture.act((writer) => writer.changeTitle("발행 이후 바꾼 제목"));
   assert.equal(fixture.value.draft.slug, "2");
 });
@@ -1081,7 +1081,7 @@ test("기존 게시글의 수정 발행이 실패해도 수정 모드와 원문�
   assert.equal(fixture.value.isEditing, true);
   assert.equal(fixture.value.publishing, true);
   fixture.published.set(sent.id, structuredClone(sent));
-  pending.resolve(response({ draft: sent, slug: sent.slug, url: "/posts/" + sent.slug + "/", commit: "update-commit", pushed: true }));
+  pending.resolve(response({ draft: sent, slug: sent.slug, url: "/posts/" + sent.slug, commit: "update-commit", pushed: true }));
   await updating;
   await fixture.flush();
   assert.equal(fixture.value.isEditing, true);

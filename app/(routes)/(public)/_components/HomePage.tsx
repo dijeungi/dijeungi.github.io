@@ -8,6 +8,7 @@ import { GitHubOverview } from "./GitHubOverview";
 import { siteName } from "@/app/shared/constants/site";
 import { useHomePosts } from "../_hooks/useHomePosts";
 import { formatPostDate } from "@/app/shared/lib/date";
+import { postPath } from "@/app/shared/lib/post-urls";
 import { WriteButton } from "../write/_components/WriteButton";
 import { SiteHeader } from "@/app/shared/components/SiteHeader";
 
@@ -73,7 +74,7 @@ export function HomePage({ posts, github }: HomePageProps) {
               <article className={styles.post} key={post.slug}>
                 <Link
                   className={styles.postLink}
-                  href={"/posts/" + encodeURIComponent(post.slug) + "/"}
+                  href={postPath(post.slug)}
                   aria-labelledby={"post-title-" + post.slug}
                 >
                   <div className={styles.thumbnail} aria-hidden="true">
