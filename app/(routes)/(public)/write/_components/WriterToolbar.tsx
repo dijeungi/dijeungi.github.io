@@ -1,3 +1,5 @@
+import { LuQuote } from "react-icons/lu";
+
 import { WriterIcon } from "./WriterIcon";
 
 import styles from "../Write.module.css";
@@ -19,7 +21,17 @@ export function WriterToolbar({ busy, uploading, insertMarkdown, uploadInlineIma
       <span className={styles.toolbarSeparator} aria-hidden="true" />
       <button className={styles.toolButton} type="button" title="글머리 목록" aria-label="글머리 목록" disabled={busy} onMouseDown={(event) => event.preventDefault()} onClick={() => insertMarkdown("bullets")}><WriterIcon name="bullets" /></button>
       <button className={styles.toolButton} type="button" title="번호 목록" aria-label="번호 목록" disabled={busy} onMouseDown={(event) => event.preventDefault()} onClick={() => insertMarkdown("numbers")}><WriterIcon name="numbers" /></button>
-      <button className={styles.toolButton + " " + styles.quoteButton} type="button" title="인용문" aria-label="인용문" disabled={busy} onMouseDown={(event) => event.preventDefault()} onClick={() => insertMarkdown("quote")}>“</button>
+      <button
+        className={styles.toolButton}
+        type="button"
+        title="인용문"
+        aria-label="인용문"
+        disabled={busy}
+        onMouseDown={(event) => event.preventDefault()}
+        onClick={() => insertMarkdown("quote")}
+      >
+        <LuQuote size={20} strokeWidth={1.6} aria-hidden="true" focusable="false" />
+      </button>
       <button className={styles.toolButton} type="button" title="코드 블록" aria-label="코드 블록" disabled={busy} onMouseDown={(event) => event.preventDefault()} onClick={() => insertMarkdown("code")}><WriterIcon name="code" /></button>
       <label className={styles.toolButton + (busy || uploading ? " " + styles.disabledTool : "")} title="본문 이미지 추가">
         <input className={styles.srOnly} type="file" accept="image/png,image/jpeg,image/webp,image/gif" aria-label="본문 이미지 추가" disabled={busy || uploading} onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadInlineImage(file); event.currentTarget.value = ""; }} />

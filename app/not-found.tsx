@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { LuArrowRight } from "react-icons/lu";
 
 import styles from "./NotFound.module.css";
 
@@ -9,7 +10,10 @@ export default function NotFound() {
       <span className={styles.eyebrow}>404 / NOT FOUND</span>
       <h1 className={styles.title}>이 기록은 찾을 수 없어요.</h1>
       <p className={styles.description}>입력한 글 주소를 확인해 주세요.</p>
-      <Link href="/" className={styles.link}>홈으로 돌아가기 →</Link>
+      <Link href="/" className={styles.link}>
+        홈으로 돌아가기
+        <LuArrowRight size={14} aria-hidden="true" focusable="false" />
+      </Link>
     </main>
   );
 }

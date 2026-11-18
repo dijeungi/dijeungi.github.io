@@ -32,13 +32,11 @@ export function ArticleReader({ post, commentsEnabled = false }: ArticleReaderPr
         title={post.title}
         progress={progress}
         isReading={isReading}
-        copyLink={copyLink}
         scrollToTop={scrollToTop}
         headerRef={headerRef}
-        shareStatus={shareStatus}
       />
       <main id="main-content">
-        <ArticleHero post={post} />
+        <ArticleHero post={post} copyLink={copyLink} shareStatus={shareStatus} />
         <div className={styles.pageGrid}>
           <ArticleBody
             post={post}

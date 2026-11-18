@@ -1,5 +1,7 @@
 "use client";
 
+import { LuMoon, LuSun } from "react-icons/lu";
+
 import { useTheme } from "@/app/shared/hooks/useTheme";
 
 import styles from "./ThemeToggle.module.css";
@@ -17,36 +19,8 @@ export function ThemeToggle() {
       aria-label={label}
       title={label}
     >
-      <svg
-        className={styles.moon}
-        width="20"
-        height="20"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        aria-hidden="true"
-        focusable="false"
-      >
-        <path d="M20.5 13A8.5 8.5 0 0 1 11 3.5 8.5 8.5 0 1 0 20.5 13Z" />
-      </svg>
-      <svg
-        className={styles.sun}
-        width="20"
-        height="20"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinecap="round"
-        aria-hidden="true"
-        focusable="false"
-      >
-        <circle cx="12" cy="12" r="4" />
-        <path d="M12 2v2m0 16v2M2 12h2m16 0h2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42" />
-      </svg>
+      <LuMoon className={styles.moon} size={20} strokeWidth={1.6} aria-hidden="true" focusable="false" />
+      <LuSun className={styles.sun} size={20} strokeWidth={1.6} aria-hidden="true" focusable="false" />
     </button>
   );
 }

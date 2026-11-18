@@ -1,4 +1,5 @@
 import Image from "next/image";
+import { LuLink } from "react-icons/lu";
 
 import { formatPostDate } from "@/app/shared/lib/date";
 import { getFirstContentImage } from "@/app/shared/lib/content";
@@ -6,10 +7,10 @@ import { getFirstContentImage } from "@/app/shared/lib/content";
 import styles from "../PostDetail.module.css";
 import mediaStyles from "@/app/shared/styles/ArticleMedia.module.css";
 
-import type { ArticleReaderProps } from "../_types/reader";
+import type { ArticleHeroProps } from "../_types/reader";
 
-// 카테고리와 제목 및 대표 이미지 표시
-export function ArticleHero({ post }: ArticleReaderProps) {
+// 카테고리, 제목, 글 주소 복사 버튼과 대표 이미지 표시
+export function ArticleHero({ post, copyLink, shareStatus }: ArticleHeroProps) {
   const firstContentImage = getFirstContentImage(post.document);
   const heroImage = post.heroImage?.src === firstContentImage?.src ? undefined : post.heroImage;
 
@@ -20,12 +21,31 @@ export function ArticleHero({ post }: ArticleReaderProps) {
           <p className={styles.category}>{post.category}</p>
           <h1 id="article-title">{post.title}</h1>
           {post.subtitle && <p className={styles.subtitle}>{post.subtitle}</p>}
-          <div className={styles.meta} aria-label="글 정보">
-            <time dateTime={post.date}>
-              {formatPostDate(post.date)}
-            </time>
-            <span className={styles.metaSeparator} aria-hidden="true">|</span>
-            <span>{post.readingMinutes} min read</span>
+          <div className={styles.meta} role="group" aria-label="글 정보">
+            <div className={styles.metaDetails}>
+              <time dateTime={post.date}>
+                {formatPostDate(post.date)}
+              </time>
+              <span className={styles.metaSeparator} aria-hidden="true" />
+              <span>{post.readingMinutes} min read</span>
+            </div>
+            <div className={styles.share}>
+              <span className={styles.metaSeparator} aria-hidden="true" />
+              <button
+                className={styles.shareButton}
+                type="button"
+                disabled={shareStatus === "copying"}
+                title="글 링크 복사"
+                onClick={() => void copyLink()}
+              >
+                <LuLink size={16} aria-hidden="true" focusable="false" />
+                <span>Copy URL</span>
+              </button>
+            </div>
+            <p className={shareStatus === "error" ? styles.shareFeedback : styles.srOnly} role="status">
+              {shareStatus === "success" && "글 링크를 복사했습니다."}
+              {shareStatus === "error" && "링크를 복사하지 못했습니다. 주소창의 주소를 직접 복사해 주세요."}
+            </p>
           </div>
         </header>
       </div>

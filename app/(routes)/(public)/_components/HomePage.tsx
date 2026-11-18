@@ -2,14 +2,14 @@
 
 import Link from "next/link";
 import Image from "next/image";
+import { LuChevronLeft, LuChevronRight } from "react-icons/lu";
 
 import { GitHubOverview } from "./GitHubOverview";
+import { siteName } from "@/app/shared/constants/site";
 import { useHomePosts } from "../_hooks/useHomePosts";
 import { formatPostDate } from "@/app/shared/lib/date";
 import { WriteButton } from "../write/_components/WriteButton";
-import { SiteBrand } from "@/app/shared/components/SiteBrand";
-import { ThemeToggle } from "@/app/shared/components/ThemeToggle";
-import { siteName, linkedInProfileUrl } from "@/app/shared/constants/site";
+import { SiteHeader } from "@/app/shared/components/SiteHeader";
 
 import styles from "../Home.module.css";
 import frameStyles from "@/app/shared/styles/PageFrame.module.css";
@@ -34,37 +34,7 @@ export function HomePage({ posts, github }: HomePageProps) {
   return (
     <div className={styles.home + " " + frameStyles.frame}>
       {hasPosts && <a className={styles.skipLink} href="#posts">글 목록으로 바로가기</a>}
-      <header className={styles.header}>
-        <div className={styles.headerInner + " " + frameStyles.content}>
-          <SiteBrand />
-          <div className={styles.headerActions}>
-            <nav className={styles.socialLinks} aria-label="개발자 프로필">
-              <a
-                className={styles.socialLink}
-                href={github.profile.profileUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label="GitHub 프로필, 새 탭에서 열기"
-              >
-                GitHub
-                <span className={styles.externalLinkIcon} aria-hidden="true">↗</span>
-              </a>
-              <a
-                className={styles.socialLink}
-                href={linkedInProfileUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label="LinkedIn 프로필, 새 탭에서 열기"
-              >
-                LinkedIn
-                <span className={styles.externalLinkIcon} aria-hidden="true">↗</span>
-              </a>
-            </nav>
-            <span className={styles.headerSeparator} aria-hidden="true" />
-            <ThemeToggle />
-          </div>
-        </div>
-      </header>
+      <SiteHeader />
 
       <GitHubOverview github={github} />
 
@@ -150,7 +120,7 @@ export function HomePage({ posts, github }: HomePageProps) {
                 disabled={currentPage === 1}
                 onClick={() => selectPage(currentPage - 1)}
               >
-                <span className={styles.pageArrow} aria-hidden="true">‹</span>
+                <LuChevronLeft size={18} strokeWidth={1.6} aria-hidden="true" focusable="false" />
               </button>
               {pageNumbers.map((page) => (
                 <button
@@ -171,7 +141,7 @@ export function HomePage({ posts, github }: HomePageProps) {
                 disabled={currentPage === totalPages}
                 onClick={() => selectPage(currentPage + 1)}
               >
-                <span className={styles.pageArrow} aria-hidden="true">›</span>
+                <LuChevronRight size={18} strokeWidth={1.6} aria-hidden="true" focusable="false" />
               </button>
             </nav>
           )}

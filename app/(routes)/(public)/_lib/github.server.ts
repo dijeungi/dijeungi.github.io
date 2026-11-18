@@ -1,13 +1,12 @@
 import { request } from "node:https";
 
 import { parseGitHubProfile } from "./github-live";
+import { githubLogin } from "@/app/shared/constants/site";
 import { parseContributionCalendar, expandContributionSnapshot } from "./github-calendar";
 
 import snapshot from "../_data/github-snapshot.json";
 
 import type { GitHubOverview } from "../_types/github";
-
-const login = "dijeungi";
 
 // 빌드 서버에서만 GitHub 응답 읽기
 function readGitHub(url: string, token?: string, body?: string): Promise<string> {
@@ -56,7 +55,7 @@ async function getCommitCounts(years: number[], now: Date): Promise<Map<number, 
     return `year${year}: contributionsCollection(from: "${year}-01-01T00:00:00Z", to: "${to}") { totalCommitContributions }`;
   }).join("\n");
   try {
-    const body = JSON.stringify({ query: `query { user(login: "${login}") { ${fields} } }` });
+    const body = JSON.stringify({ query: `query { user(login: "${githubLogin}") { ${fields} } }` });
     const value: unknown = JSON.parse(await readGitHub("https://api.github.com/graphql", token, body));
     if (!isRecord(value) || value.errors || !isRecord(value.data) || !isRecord(value.data.user)) return counts;
     for (const year of years) {
@@ -79,13 +78,13 @@ export async function getGitHubOverview(): Promise<GitHubOverview> {
   const years = Array.from({ length: currentYear - firstYear + 1 }, (_, index) => currentYear - index);
   const fallbackYears = new Map(snapshot.years.map((year) => [year.year, expandContributionSnapshot(year)]));
   const [profileResult, calendarResults, commitCounts] = await Promise.all([
-    readGitHub("https://api.github.com/users/" + login).then((text) => parseGitHubProfile(JSON.parse(text), login)).then(
+    readGitHub("https://api.github.com/users/" + githubLogin).then((text) => parseGitHubProfile(JSON.parse(text), githubLogin)).then(
       (profile) => ({ profile, fresh: true }),
       () => ({ profile: snapshot.profile, fresh: false }),
     ),
     Promise.all(years.map(async (year) => {
       try {
-        const html = await readGitHub("https://github.com/users/" + login + "/contributions?from=" + year + "-01-01&to=" + year + "-12-31");
+        const html = await readGitHub("https://github.com/users/" + githubLogin + "/contributions?from=" + year + "-01-01&to=" + year + "-12-31");
         return { data: parseContributionCalendar(html, year), fresh: true };
       } catch {
         return { data: fallbackYears.get(year), fresh: false };

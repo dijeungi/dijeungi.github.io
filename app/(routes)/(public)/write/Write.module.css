@@ -284,11 +284,6 @@
   font-size: 12px;
   font-weight: 600;
 }
-.quoteButton {
-  padding-top: 7px;
-  font-family: Georgia, serif;
-  font-size: 30px;
-}
 .disabledTool {
   cursor: default;
   opacity: 0.4;
@@ -575,8 +570,14 @@
   text-decoration: underline;
 }
 .deployLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   margin-left: auto;
   white-space: nowrap;
+}
+.deployLink svg {
+  flex-shrink: 0;
 }
 
 .confirmDialog {

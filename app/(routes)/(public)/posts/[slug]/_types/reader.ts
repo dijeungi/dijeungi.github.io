@@ -8,8 +8,10 @@ export type ArticleReaderProps = { post: Post; commentsEnabled?: boolean };
 
 export type ArticleHeaderProps = Pick<
   ReaderState,
-  "progress" | "isReading" | "copyLink" | "scrollToTop" | "headerRef" | "shareStatus"
+  "progress" | "isReading" | "scrollToTop" | "headerRef"
 > & { title: string };
+
+export type ArticleHeroProps = Pick<ReaderState, "copyLink" | "shareStatus"> & { post: Post };
 
 export type ArticleBodyProps = Pick<
   ReaderState,

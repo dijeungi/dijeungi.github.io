@@ -1,5 +1,7 @@
 "use client";
 
+import { LuArrowUpRight } from "react-icons/lu";
+
 import { WriterIcon } from "./WriterIcon";
 import { WriterPreview } from "./WriterPreview";
 import { WriterToolbar } from "./WriterToolbar";
@@ -85,7 +87,19 @@ export function PostWriter() {
           {connection === "loading" && <p className={styles.connectionMessage} role="status">글쓰기 공간을 준비하고 있습니다.</p>}
           {notice && <div className={styles.notice} role="status"><p>{notice}</p>{connection === "unavailable" && <button type="button" onClick={reconnect}>다시 연결</button>}</div>}
           {error && <div className={styles.error} role="alert"><p>{error}</p>{pendingCommit && <p>작성한 글은 이 컴퓨터에 보관되어 있습니다. {action} 재시도로 배포 요청을 다시 보낼 수 있습니다.</p>}{connection === "unavailable" && <button type="button" onClick={reconnect}>다시 연결</button>}</div>}
-          {published && <div className={styles.success} role="status"><WriterIcon name="check" /><div><strong>{published.wasEditing ? "수정을 요청했습니다." : "발행을 요청했습니다."}</strong><p>자동 배포가 끝나면 <a href={new URL(published.url, "https://dijeungi.github.io").href} target="_blank" rel="noreferrer">글 주소에서 확인</a>할 수 있습니다.</p></div><a className={styles.deployLink} href="https://github.com/dijeungi/dijeungi.github.io/actions" target="_blank" rel="noreferrer">배포 확인 ↗</a></div>}
+          {published && (
+            <div className={styles.success} role="status">
+              <WriterIcon name="check" />
+              <div>
+                <strong>{published.wasEditing ? "수정을 요청했습니다." : "발행을 요청했습니다."}</strong>
+                <p>자동 배포가 끝나면 <a href={new URL(published.url, "https://dijeungi.github.io").href} target="_blank" rel="noreferrer">글 주소에서 확인</a>할 수 있습니다.</p>
+              </div>
+              <a className={styles.deployLink} href="https://github.com/dijeungi/dijeungi.github.io/actions" target="_blank" rel="noreferrer">
+                배포 확인
+                <LuArrowUpRight size={14} strokeWidth={1.6} aria-hidden="true" focusable="false" />
+              </a>
+            </div>
+          )}
         </div>
       )}
 

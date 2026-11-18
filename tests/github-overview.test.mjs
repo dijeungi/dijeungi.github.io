@@ -5,6 +5,7 @@ import { readFile } from "node:fs/promises";
 import { runInNewContext } from "node:vm";
 import typescript from "typescript";
 
+import { githubLogin } from "../app/shared/constants/site.ts";
 import { parseGitHubProfile } from "../app/(routes)/(public)/_lib/github-live.ts";
 import { parseContributionCalendar, expandContributionSnapshot } from "../app/(routes)/(public)/_lib/github-calendar.ts";
 
@@ -63,6 +64,7 @@ async function loadOverview(profileAvailable = true) {
     require: (specifier) => {
       if (specifier === "node:https") return { request };
       if (specifier === "./github-live") return { parseGitHubProfile };
+      if (specifier === "@/app/shared/constants/site") return { githubLogin };
       if (specifier === "./github-calendar") return { parseContributionCalendar, expandContributionSnapshot };
       if (specifier === "../_data/github-snapshot.json") return snapshot;
       throw new Error("검증에서 허용하지 않은 서버 의존성입니다: " + specifier);

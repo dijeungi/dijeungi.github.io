@@ -1,5 +1,7 @@
 "use client";
 
+import { LuChevronDown } from "react-icons/lu";
+
 import { useGitHubYearSelect } from "../_hooks/useGitHubYearSelect";
 
 import styles from "../GitHubOverview.module.css";
@@ -27,7 +29,7 @@ export function GitHubYearSelect({ years, selectedYear, onSelect }: GitHubYearSe
         onKeyDown={onKeyDown}
       >
         <span>{selectedYear === null ? "연도" : selectedYear + "년"}</span>
-        <span className={styles.yearChevron} aria-hidden="true"><span>›</span></span>
+        <LuChevronDown className={styles.yearChevron} size={12} aria-hidden="true" focusable="false" />
       </button>
       {isOpen && (
         <div className={styles.yearMenu} id={listboxId} role="listbox" aria-label="GitHub 활동 연도">
