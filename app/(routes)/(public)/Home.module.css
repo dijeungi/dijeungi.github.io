@@ -2,7 +2,8 @@
   --sidebar-width: 156px;
   --home-column-gap: 48px;
   --thumbnail-width: 288px;
-  --thumbnail-height: calc(var(--thumbnail-width) * 0.625);
+  --thumbnail-ratio: calc(16 / 9);
+  --thumbnail-height: calc(var(--thumbnail-width) / var(--thumbnail-ratio));
   --home-blue: var(--theme-accent, #3182f6);
   --home-muted: var(--theme-text-muted, #6b7684);
   min-height: 100vh;
@@ -171,10 +172,15 @@
   position: relative;
   width: var(--thumbnail-width);
   height: var(--thumbnail-height);
-  aspect-ratio: 16 / 10;
+  aspect-ratio: var(--thumbnail-ratio);
   overflow: hidden;
   border-radius: 13px;
   background: var(--theme-surface-soft, #f3f7fc);
+}
+.thumbnailBackdrop {
+  object-fit: cover;
+  filter: blur(10px);
+  transform: scale(1.28);
 }
 .thumbnailImage {
   position: absolute;
@@ -182,7 +188,7 @@
   display: block;
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
 }
 .thumbnailFallback {
   position: absolute;
@@ -224,7 +230,7 @@
   flex-direction: column;
   align-items: flex-start;
   min-width: 0;
-  height: var(--thumbnail-height);
+  min-height: var(--thumbnail-height);
 }
 .postCategory {
   flex-shrink: 0;
@@ -479,7 +485,7 @@
     height: auto;
   }
   .postCopy {
-    height: auto;
+    min-height: 0;
   }
   .postCategory {
     font-size: 11px;

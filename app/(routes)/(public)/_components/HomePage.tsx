@@ -108,15 +108,18 @@ export function HomePage({ posts, github }: HomePageProps) {
                 >
                   <div className={styles.thumbnail} aria-hidden="true">
                     {post.heroImage ? (
-                      <Image
-                        className={styles.thumbnailImage}
-                        src={post.heroImage.src}
-                        alt=""
-                        width={post.heroImage.width ?? 1600}
-                        height={post.heroImage.height ?? 900}
-                        sizes="(max-width: 600px) 70vw, (max-width: 820px) 224px, 288px"
-                        unoptimized
-                      />
+                      <>
+                        <Image className={styles.thumbnailBackdrop} src={post.heroImage.src} alt="" fill unoptimized />
+                        <Image
+                          className={styles.thumbnailImage}
+                          src={post.heroImage.src}
+                          alt=""
+                          width={post.heroImage.width ?? 1600}
+                          height={post.heroImage.height ?? 900}
+                          sizes="(max-width: 600px) 70vw, (max-width: 820px) 224px, 288px"
+                          unoptimized
+                        />
+                      </>
                     ) : (
                       <div className={styles.thumbnailFallback}>
                         <span>{post.category}</span>
