@@ -183,9 +183,8 @@
   white-space: nowrap;
 }
 .shareButton {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
+  display: inline-grid;
+  place-items: center start;
   min-height: 28px;
   padding: 0;
   border: 0;
@@ -194,9 +193,35 @@
   font: inherit;
   letter-spacing: inherit;
 }
-.shareButton:hover,
+.shareButtonIdle,
+.shareButtonCopied {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  grid-area: 1 / 1;
+}
+.shareButtonCopied,
+.shareButton[data-copied="true"] .shareButtonIdle {
+  opacity: 0;
+}
+.shareButton:is(:hover, :focus-visible) .shareButtonIdle {
+  color: var(--theme-text, #202124);
+}
 .shareButton:focus-visible {
-  color: var(--theme-accent-text, #174ea6);
+  outline: none;
+}
+.shareButton:focus-visible .shareButtonLabel {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.shareButton[data-copied="true"] .shareButtonCopied {
+  opacity: 1;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .shareButtonIdle,
+  .shareButtonCopied {
+    transition: opacity 150ms ease;
+  }
 }
 .shareFeedback {
   position: absolute;

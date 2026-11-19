@@ -129,7 +129,7 @@ export function useArticleReader() {
     shareTimerRef.current = window.setTimeout(() => {
       setShareStatus("idle");
       shareTimerRef.current = null;
-    }, 3500);
+    }, copied ? 1800 : 3500);
   }
 
   return {

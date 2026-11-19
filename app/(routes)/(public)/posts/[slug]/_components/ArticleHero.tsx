@@ -1,5 +1,5 @@
 import Image from "next/image";
-import { LuLink } from "react-icons/lu";
+import { LuCheck, LuLink } from "react-icons/lu";
 
 import { formatPostDate } from "@/app/shared/lib/date";
 import { getFirstContentImage } from "@/app/shared/lib/content";
@@ -35,11 +35,19 @@ export function ArticleHero({ post, copyLink, shareStatus }: ArticleHeroProps) {
                 className={styles.shareButton}
                 type="button"
                 disabled={shareStatus === "copying"}
+                aria-label="Copy URL"
                 title="글 링크 복사"
+                data-copied={shareStatus === "success"}
                 onClick={() => void copyLink()}
               >
-                <LuLink size={16} aria-hidden="true" focusable="false" />
-                <span>Copy URL</span>
+                <span className={styles.shareButtonIdle} aria-hidden="true">
+                  <LuLink size={16} focusable="false" />
+                  <span className={styles.shareButtonLabel}>Copy URL</span>
+                </span>
+                <span className={styles.shareButtonCopied} aria-hidden="true">
+                  <LuCheck size={16} focusable="false" />
+                  <span className={styles.shareButtonLabel}>Copied</span>
+                </span>
               </button>
             </div>
             <p className={shareStatus === "error" ? styles.shareFeedback : styles.srOnly} role="status">
